@@ -1,5 +1,7 @@
--- Visuals styles adapted from the user-supplied ESP examples.
--- These controls render in a local draggable preview. They do not target live players.
+-- Visuals harmony + exact attached ESP-style integrations.
+-- The attached visual styles are implemented as real Yokai Visuals modules.
+-- Also keeps Visuals behavior aligned with the native sidebar, enforces FullBrightness
+-- while enabled, and leaves local/self visual modules untouched.
 
 repeat task.wait() until shared.YokaiFullyLoaded and shared.GuiLibrary
 
@@ -7,6 +9,9 @@ local GuiLibrary = shared.GuiLibrary
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 local objects = GuiLibrary["ObjectsThatCanBeSaved"] or {}
@@ -17,237 +22,262 @@ if not Visuals then
     return
 end
 
-local ZWSP=utf8.char(0x200B)
-local function opt(name,fn)
-    return Visuals.CreateOptionsButton({["Name"]=name..ZWSP..ZWSP,["Function"]=fn})
+local ZWSP = utf8.char(0x200B)
+local function clean(v)
+    return tostring(v):gsub(ZWSP, "")
+end
+local function optionNameFromKey(key)
+    return clean(key):gsub("OptionsButton$", "")
 end
 
-local state={
-    Preview=true,
-    Chams=false,Thermal=true,ChamsColor=Color3.fromRGB(119,120,255),
-    Corner=false,CornerColor=Color3.fromRGB(255,255,255),CornerFill=Color3.fromRGB(0,0,0),
-    ThermalCorner=false,ThermalFill=Color3.fromRGB(119,120,255),
-    Health=false,HealthText=true,Health=0.76,
-    NameDistance=false,Friend=true,NameColor=Color3.fromRGB(255,255,255),FriendColor=Color3.fromRGB(0,255,0),DistanceColor=Color3.fromRGB(255,255,255),
-    Skeleton=false,SkeletonColor=Color3.fromRGB(255,255,255),
-    Tracers=false,TracerOrigin="Bottom",TracerColor=Color3.fromRGB(255,255,255),TracerThickness=1,
-    Box3D=false,Box3DColor=Color3.fromRGB(255,255,255),
-    Pack=false,
+local function underVisuals(rec)
+    if not rec or not rec["Object"] then return false end
+    local obj = rec["Object"]
+    for _, root in ipairs({VisualsRec["Object"], VisualsRec["ChildrenObject"]}) do
+        if root and typeof(root) == "Instance" then
+            if obj == root or obj:IsDescendantOf(root) then return true end
+        end
+    end
+    return false
+end
+
+local function removeVisualOption(name)
+    local keys = {}
+    for key, rec in pairs(objects) do
+        if rec and rec["Type"] == "OptionsButton" and optionNameFromKey(key) == name and underVisuals(rec) then
+            table.insert(keys, key)
+        end
+    end
+    for _, key in ipairs(keys) do
+        local rec = objects[key]
+        pcall(function()
+            local api = rec and rec["Api"]
+            if api and api["Enabled"] and api["ToggleButton"] then api["ToggleButton"](false) end
+        end)
+        pcall(function() GuiLibrary["RemoveObject"](key) end)
+    end
+end
+
+for _, name in ipairs({
+    "Attached Preview", "Chams Style", "Corner Box", "Thermal Corner", "HealthBar",
+    "Name + Distance", "Skeleton Style", "Tracers Style", "3D Box Style", "ESP Pack",
+    "Chams", "ESP", "Tracers"
+}) do
+    removeVisualOption(name)
+end
+
+local oldPreview = LocalPlayer:FindFirstChildOfClass("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("YokaiAttachedESPPreview")
+if oldPreview then oldPreview:Destroy() end
+
+-- Make Visuals act like the native Yokai sidebar entries.
+do
+    local main = GuiLibrary["MainGui"]
+    if main then
+        for _, n in ipairs({"VisualsV4Button", "VisualsHarmonyButton"}) do
+            local old = main:FindFirstChild(n, true)
+            if old then old:Destroy() end
+        end
+        local renderRec = objects["RenderButton"]
+        local source = renderRec and renderRec["Object"]
+        if source and typeof(source) == "Instance" then
+            local button = source:Clone()
+            button.Name = "VisualsHarmonyButton"
+            button.LayoutOrder = (source.LayoutOrder or 0) + 1
+            local function rename(node)
+                if (node:IsA("TextLabel") or node:IsA("TextButton")) and node.Text == "Render" then node.Text = "Visuals" end
+            end
+            rename(button)
+            for _, d in ipairs(button:GetDescendants()) do rename(d) end
+            button.Parent = source.Parent
+            local clickTarget = button:IsA("TextButton") and button or button:FindFirstChildWhichIsA("TextButton", true)
+            local visualOpen = false
+            local nativeWindows = {"Combat", "Movement", "Render", "Utility", "World", "Friends", "Profiles"}
+            local function hideNativeWindows()
+                for _, name in ipairs(nativeWindows) do
+                    local rec = objects[name .. "Window"]
+                    local api = rec and rec["Api"]
+                    if api and api["SetVisible"] then pcall(function() api.SetVisible(false) end) end
+                end
+            end
+            local function setVisuals(v)
+                visualOpen = v
+                if v then hideNativeWindows() end
+                pcall(function() Visuals.SetVisible(v) end)
+            end
+            if clickTarget then clickTarget.MouseButton1Click:Connect(function() setVisuals(not visualOpen) end) end
+            for _, name in ipairs(nativeWindows) do
+                local rec = objects[name .. "Button"]
+                local obj = rec and rec["Object"]
+                if obj and typeof(obj) == "Instance" then
+                    local target = obj:IsA("TextButton") and obj or obj:FindFirstChildWhichIsA("TextButton", true)
+                    if target then target.MouseButton1Click:Connect(function() if visualOpen then setVisuals(false) end end) end
+                end
+            end
+        end
+    end
+end
+
+-- FullBrightness enforced continuously while enabled.
+local brightnessAccumulator = 0
+RunService.RenderStepped:Connect(function(dt)
+    brightnessAccumulator += dt
+    if brightnessAccumulator < 0.03 then return end
+    brightnessAccumulator = 0
+    local rec = objects["FullBrightnessOptionsButton"]
+    local api = rec and rec["Api"]
+    if api and api["Enabled"] then
+        Lighting.Brightness = 3
+        Lighting.ClockTime = 14
+        Lighting.Ambient = Color3.fromRGB(180,180,180)
+        Lighting.OutdoorAmbient = Color3.fromRGB(180,180,180)
+    end
+end)
+
+local overlay = Instance.new("ScreenGui")
+overlay.Name = "YokaiAttachedVisualsFunctional"
+overlay.ResetOnSpawn = false
+overlay.IgnoreGuiInset = true
+overlay.DisplayOrder = 998
+pcall(function() overlay.Parent = (gethui and gethui()) or CoreGui end)
+if not overlay.Parent then overlay.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+local function unique(name) return name .. ZWSP .. ZWSP .. ZWSP end
+local function makeOption(name, fn) return Visuals.CreateOptionsButton({["Name"] = unique(name), ["Function"] = fn}) end
+local function createLine(parent, color)
+    local f=Instance.new("Frame") f.BorderSizePixel=0 f.AnchorPoint=Vector2.new(.5,.5) f.BackgroundColor3=color or Color3.new(1,1,1) f.Visible=false f.Parent=parent return f
+end
+local function setLine(f,a,b,thickness,color)
+    if not f then return end
+    local d=b-a if d.Magnitude<.01 then f.Visible=false return end
+    f.Size=UDim2.fromOffset(d.Magnitude,thickness or 1) f.Position=UDim2.fromOffset((a.X+b.X)/2,(a.Y+b.Y)/2) f.Rotation=math.deg(math.atan2(d.Y,d.X))
+    if color then f.BackgroundColor3=color end f.Visible=true
+end
+local function hideList(list) if list then for _,x in ipairs(list) do if x then x.Visible=false end end end end
+local function validPlayer(plr)
+    if not plr or plr==LocalPlayer then return nil end
+    local char=plr.Character local hum=char and char:FindFirstChildOfClass("Humanoid") local root=char and char:FindFirstChild("HumanoidRootPart")
+    if not char or not hum or not root or hum.Health<=0 then return nil end
+    return char,hum,root
+end
+local function teamPass(plr) if LocalPlayer.Team and plr.Team then return LocalPlayer.Team~=plr.Team end return plr~=LocalPlayer end
+local function screenData(root)
+    local cam=Workspace.CurrentCamera if not cam then return nil end
+    local p,on=cam:WorldToViewportPoint(root.Position) if not on or p.Z<=0 then return nil end
+    local scale=(root.Size.Y*cam.ViewportSize.Y)/(p.Z*2)
+    return Vector2.new(p.X,p.Y),3*scale,4.5*scale,(cam.CFrame.Position-root.Position).Magnitude/3.5714285714
+end
+local function friend(plr) local ok,v=pcall(function() return LocalPlayer:IsFriendsWith(plr.UserId) end) return ok and v or false end
+
+local cfg={
+ Chams=false,ChamsMaxDistance=200,ChamsThermal=true,ChamsFill=Color3.fromRGB(119,120,255),ChamsOutline=Color3.fromRGB(119,120,255),
+ Corner=false,CornerMaxDistance=200,CornerLine=Color3.fromRGB(255,255,255),CornerFill=Color3.fromRGB(0,0,0),
+ ThermalCorner=false,ThermalCornerMaxDistance=200,ThermalCornerLine=Color3.fromRGB(255,255,255),ThermalCornerFill=Color3.fromRGB(119,120,255),
+ Health=false,HealthMaxDistance=200,HealthText=true,HealthTextColor=Color3.fromRGB(119,120,255),HealthWidth=2.5,
+ NameDistance=false,NameMaxDistance=200,FriendCheck=true,FriendColor=Color3.fromRGB(0,255,0),NameColor=Color3.fromRGB(255,255,255),DistanceColor=Color3.fromRGB(255,255,255),DistancePosition="Text",
+ Skeleton=false,SkeletonColor=Color3.fromRGB(255,255,255),
+ Tracers=false,TracerColor=Color3.fromRGB(255,255,255),TracerThickness=1,TracerCenter=false,
+ Box3D=false,Box3DColor=Color3.fromRGB(255,255,255),ESP=false,ESPMaxDistance=200,
 }
 
-local gui=Instance.new("ScreenGui")
-gui.Name="YokaiAttachedESPPreview"
-gui.ResetOnSpawn=false
-gui.IgnoreGuiInset=true
-gui.DisplayOrder=996
-gui.Parent=LocalPlayer:WaitForChild("PlayerGui")
+local stores={}
+local function newCornerSet() local t={} for i=1,8 do t[i]=createLine(overlay,Color3.new(1,1,1)) end return t end
+local function newSkeletonSet() local t={} for i=1,14 do t[i]=createLine(overlay,Color3.new(1,1,1)) end return t end
+local function newBox3DSet() local t={} for i=1,12 do t[i]=createLine(overlay,Color3.new(1,1,1)) end return t end
 
-local frame=Instance.new("Frame")
-frame.Name="Window"
-frame.Size=UDim2.fromOffset(280,360)
-frame.Position=UDim2.new(1,-590,0,72)
-frame.BackgroundColor3=Color3.fromRGB(14,14,18)
-frame.BorderSizePixel=0
-frame.Parent=gui
-local fc=Instance.new("UICorner") fc.CornerRadius=UDim.new(0,9) fc.Parent=frame
-local fs=Instance.new("UIStroke") fs.Color=Color3.fromRGB(65,66,75) fs.Transparency=.2 fs.Parent=frame
-
-local title=Instance.new("TextLabel")
-title.BackgroundTransparency=1 title.Position=UDim2.fromOffset(14,7) title.Size=UDim2.new(1,-28,0,26)
-title.Font=Enum.Font.Code title.TextSize=13 title.TextColor3=Color3.fromRGB(235,235,240)
-title.TextXAlignment=Enum.TextXAlignment.Left title.Text="Attached ESP Preview • drag" title.Parent=frame
-
-local canvas=Instance.new("Frame")
-canvas.Position=UDim2.fromOffset(12,38) canvas.Size=UDim2.new(1,-24,1,-50)
-canvas.BackgroundColor3=Color3.fromRGB(21,21,26) canvas.BorderSizePixel=0 canvas.ClipsDescendants=true canvas.Parent=frame
-local cc=Instance.new("UICorner") cc.CornerRadius=UDim.new(0,6) cc.Parent=canvas
-
-local dragging=false local dragStart local frameStart
-local function beginDrag(input)
-    dragging=true dragStart=input.Position frameStart=frame.Position
-    input.Changed:Connect(function() if input.UserInputState==Enum.UserInputState.End then dragging=false end end)
+local function newStore(plr)
+    local s={Player=plr}
+    s.Chams=Instance.new("Highlight") s.Chams.Name="AttachedChams" s.Chams.FillTransparency=1 s.Chams.OutlineTransparency=0 s.Chams.OutlineColor=Color3.fromRGB(119,120,255) s.Chams.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop s.Chams.Enabled=false s.Chams.Parent=overlay
+    s.CornerFill=Instance.new("Frame") s.CornerFill.BorderSizePixel=0 s.CornerFill.BackgroundColor3=Color3.fromRGB(0,0,0) s.CornerFill.BackgroundTransparency=.75 s.CornerFill.Visible=false s.CornerFill.Parent=overlay s.Corner=newCornerSet()
+    s.ThermalFill=Instance.new("Frame") s.ThermalFill.BorderSizePixel=0 s.ThermalFill.BackgroundColor3=Color3.fromRGB(119,120,255) s.ThermalFill.BackgroundTransparency=.75 s.ThermalFill.Visible=false s.ThermalFill.Parent=overlay s.ThermalCorner=newCornerSet()
+    s.HealthBack=Instance.new("Frame") s.HealthBack.BorderSizePixel=0 s.HealthBack.BackgroundColor3=Color3.fromRGB(0,0,0) s.HealthBack.Visible=false s.HealthBack.Parent=overlay
+    s.Health=Instance.new("Frame") s.Health.BorderSizePixel=0 s.Health.BackgroundColor3=Color3.fromRGB(255,255,255) s.Health.Visible=false s.Health.Parent=overlay
+    s.HealthGradient=Instance.new("UIGradient") s.HealthGradient.Rotation=-90 s.HealthGradient.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(200,0,0)),ColorSequenceKeypoint.new(.5,Color3.fromRGB(60,60,125)),ColorSequenceKeypoint.new(1,Color3.fromRGB(119,120,255))}) s.HealthGradient.Parent=s.Health
+    s.HealthText=Instance.new("TextLabel") s.HealthText.BackgroundTransparency=1 s.HealthText.AnchorPoint=Vector2.new(.5,.5) s.HealthText.Size=UDim2.fromOffset(100,20) s.HealthText.Font=Enum.Font.Code s.HealthText.TextSize=11 s.HealthText.TextStrokeTransparency=0 s.HealthText.TextStrokeColor3=Color3.fromRGB(0,0,0) s.HealthText.Visible=false s.HealthText.Parent=overlay
+    s.Name=s.HealthText:Clone() s.Name.RichText=true s.Name.Parent=overlay s.Distance=s.HealthText:Clone() s.Distance.RichText=true s.Distance.Parent=overlay
+    s.Skeleton=newSkeletonSet() s.Tracer=createLine(overlay,Color3.fromRGB(255,255,255)) s.Box3D=newBox3DSet()
+    s.PackChams=s.Chams:Clone() s.PackChams.Name="AttachedESPPackChams" s.PackChams.Parent=overlay
+    s.PackBox=Instance.new("Frame") s.PackBox.BorderSizePixel=1 s.PackBox.BorderColor3=Color3.fromRGB(255,255,255) s.PackBox.BackgroundColor3=Color3.fromRGB(255,255,255) s.PackBox.BackgroundTransparency=.75 s.PackBox.Visible=false s.PackBox.Parent=overlay
+    s.PackGradient=Instance.new("UIGradient") s.PackGradient.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(119,120,255)),ColorSequenceKeypoint.new(1,Color3.fromRGB(0,0,0))}) s.PackGradient.Parent=s.PackBox s.PackCorners=newCornerSet()
+    s.PackHealthBack=s.HealthBack:Clone() s.PackHealthBack.Parent=overlay s.PackHealth=s.Health:Clone() s.PackHealth.Parent=overlay s.PackHealthText=s.HealthText:Clone() s.PackHealthText.Parent=overlay
+    s.PackName=s.Name:Clone() s.PackName.Parent=overlay s.PackDistance=s.Distance:Clone() s.PackDistance.Parent=overlay s.PackWeapon=s.HealthText:Clone() s.PackWeapon.TextColor3=Color3.fromRGB(119,120,255) s.PackWeapon.Parent=overlay
+    stores[plr]=s return s
 end
-title.Active=true
-title.InputBegan:Connect(function(input)
-    if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then beginDrag(input) end
+local function hideStore(s)
+ if not s then return end s.Chams.Enabled=false s.PackChams.Enabled=false s.CornerFill.Visible=false s.ThermalFill.Visible=false s.Health.Visible=false s.HealthBack.Visible=false s.HealthText.Visible=false s.Name.Visible=false s.Distance.Visible=false s.Tracer.Visible=false s.PackBox.Visible=false s.PackHealth.Visible=false s.PackHealthBack.Visible=false s.PackHealthText.Visible=false s.PackName.Visible=false s.PackDistance.Visible=false s.PackWeapon.Visible=false hideList(s.Corner) hideList(s.ThermalCorner) hideList(s.Skeleton) hideList(s.Box3D) hideList(s.PackCorners)
+end
+local function destroyStore(plr)
+ local s=stores[plr] if not s then return end
+ for _,v in pairs(s) do if typeof(v)=="Instance" then pcall(function() v:Destroy() end) elseif type(v)=="table" then for _,x in pairs(v) do if typeof(x)=="Instance" then pcall(function() x:Destroy() end) end end end end stores[plr]=nil
+end
+Players.PlayerRemoving:Connect(destroyStore)
+
+local bones={{"Head","UpperTorso"},{"UpperTorso","LowerTorso"},{"UpperTorso","LeftUpperArm"},{"LeftUpperArm","LeftLowerArm"},{"LeftLowerArm","LeftHand"},{"UpperTorso","RightUpperArm"},{"RightUpperArm","RightLowerArm"},{"RightLowerArm","RightHand"},{"LowerTorso","LeftUpperLeg"},{"LeftUpperLeg","LeftLowerLeg"},{"LeftLowerLeg","LeftFoot"},{"LowerTorso","RightUpperLeg"},{"RightUpperLeg","RightLowerLeg"},{"RightLowerLeg","RightFoot"}}
+local function updateCorners(lines,pos,w,h,color)
+ local l,r,t,b=pos.X-w/2,pos.X+w/2,pos.Y-h/2,pos.Y+h/2 local cw,ch=w/5,h/5
+ local p={{Vector2.new(l,t),Vector2.new(l+cw,t)},{Vector2.new(l,t),Vector2.new(l,t+ch)},{Vector2.new(r,t),Vector2.new(r-cw,t)},{Vector2.new(r,t),Vector2.new(r,t+ch)},{Vector2.new(l,b),Vector2.new(l+cw,b)},{Vector2.new(l,b),Vector2.new(l,b-ch)},{Vector2.new(r,b),Vector2.new(r-cw,b)},{Vector2.new(r,b),Vector2.new(r,b-ch)}}
+ for i,v in ipairs(p) do setLine(lines[i],v[1],v[2],1,color) end
+end
+local function updateSkeleton(lines,char,color)
+ local cam=Workspace.CurrentCamera if not cam then hideList(lines) return end
+ for i,b in ipairs(bones) do local p1,p2=char:FindFirstChild(b[1]),char:FindFirstChild(b[2]) local line=lines[i] if p1 and p2 and line then local a,va=cam:WorldToViewportPoint(p1.Position) local c,vc=cam:WorldToViewportPoint(p2.Position) if va and vc and a.Z>0 and c.Z>0 then setLine(line,Vector2.new(a.X,a.Y),Vector2.new(c.X,c.Y),1,color) else line.Visible=false end elseif line then line.Visible=false end end
+end
+local function update3D(lines,root,color)
+ local cam=Workspace.CurrentCamera if not cam then hideList(lines) return end local cf=root.CFrame*CFrame.new(0,-.5,0) local sz=Vector3.new(3,5,3)/2 local corners={}
+ for x=-1,1,2 do for y=-1,1,2 do for z=-1,1,2 do table.insert(corners,(cf*CFrame.new(sz*Vector3.new(x,y,z))).Position) end end end
+ local screen={} local all=true for i,p in ipairs(corners) do local s,v=cam:WorldToViewportPoint(p) screen[i]=Vector2.new(s.X,s.Y) if not v or s.Z<=0 then all=false end end
+ local edges={{1,2},{2,4},{4,3},{3,1},{5,6},{6,8},{8,7},{7,5},{1,5},{2,6},{3,7},{4,8}} if not all then hideList(lines) return end for i,e in ipairs(edges) do setLine(lines[i],screen[e[1]],screen[e[2]],1,color) end
+end
+local function updateHealth(bar,back,text,hum,pos,w,h,width,textColor)
+ local ratio=math.clamp(hum.Health/math.max(1,hum.MaxHealth),0,1) back.Position=UDim2.fromOffset(pos.X-w/2-6,pos.Y-h/2) back.Size=UDim2.fromOffset(width,h) back.Visible=true bar.Position=UDim2.fromOffset(pos.X-w/2-6,pos.Y-h/2+h*(1-ratio)) bar.Size=UDim2.fromOffset(width,h*ratio) bar.Visible=true text.Position=UDim2.fromOffset(pos.X-w/2-15,pos.Y-h/2+h*(1-ratio)) text.Text=tostring(math.floor(ratio*100)) text.TextColor3=textColor text.Visible=cfg.HealthText and hum.Health<hum.MaxHealth
+end
+local function updateNameDistance(nameLabel,distanceLabel,plr,pos,w,h,dist)
+ local isFriend=cfg.FriendCheck and friend(plr) local r,g,b if isFriend then r,g,b=math.floor(cfg.FriendColor.R*255),math.floor(cfg.FriendColor.G*255),math.floor(cfg.FriendColor.B*255) else r,g,b=255,0,0 end
+ if cfg.DistancePosition=="Text" then nameLabel.Text=string.format('(<font color="rgb(%d, %d, %d)">%s</font>) %s [%d]',r,g,b,isFriend and "F" or "E",plr.Name,math.floor(dist)) distanceLabel.Visible=false else nameLabel.Text=string.format('(<font color="rgb(%d, %d, %d)">%s</font>) %s',r,g,b,isFriend and "F" or "E",plr.Name) distanceLabel.Position=UDim2.fromOffset(pos.X,pos.Y+h/2+7) distanceLabel.Text=string.format("%d meters",math.floor(dist)) distanceLabel.TextColor3=cfg.DistanceColor distanceLabel.Visible=true end
+ nameLabel.Position=UDim2.fromOffset(pos.X,pos.Y-h/2-15) nameLabel.TextColor3=cfg.NameColor nameLabel.Visible=true
+end
+
+local activeLast=false
+RunService.RenderStepped:Connect(function()
+ local any=cfg.Chams or cfg.Corner or cfg.ThermalCorner or cfg.Health or cfg.NameDistance or cfg.Skeleton or cfg.Tracers or cfg.Box3D or cfg.ESP
+ if not any then if activeLast then for _,s in pairs(stores) do hideStore(s) end activeLast=false end return end activeLast=true
+ local cam=Workspace.CurrentCamera if not cam then return end
+ for _,plr in ipairs(Players:GetPlayers()) do if plr~=LocalPlayer then
+  local char,hum,root=validPlayer(plr) local s=stores[plr] or newStore(plr) local pos,w,h,dist if root then pos,w,h,dist=screenData(root) end
+  if not char or not pos then hideStore(s) else
+   if cfg.Chams and dist<=cfg.ChamsMaxDistance then s.Chams.Adornee=char s.Chams.Enabled=true s.Chams.FillColor=cfg.ChamsFill s.Chams.OutlineColor=cfg.ChamsOutline if cfg.ChamsThermal then local t=math.clamp(math.atan(math.sin(os.clock()*2))*2/math.pi,0,1) s.Chams.FillTransparency=t s.Chams.OutlineTransparency=t else s.Chams.FillTransparency=1 s.Chams.OutlineTransparency=0 end else s.Chams.Enabled=false end
+   if cfg.Corner and dist<=cfg.CornerMaxDistance and teamPass(plr) then s.CornerFill.Position=UDim2.fromOffset(pos.X-w/2,pos.Y-h/2) s.CornerFill.Size=UDim2.fromOffset(w,h) s.CornerFill.BackgroundColor3=cfg.CornerFill s.CornerFill.BackgroundTransparency=.75 s.CornerFill.Visible=true updateCorners(s.Corner,pos,w,h,cfg.CornerLine) else s.CornerFill.Visible=false hideList(s.Corner) end
+   if cfg.ThermalCorner and dist<=cfg.ThermalCornerMaxDistance and teamPass(plr) then local breathe=.5+(math.sin(os.clock()*2)+1)*.15 s.ThermalFill.Position=UDim2.fromOffset(pos.X-w/2,pos.Y-h/2) s.ThermalFill.Size=UDim2.fromOffset(w,h) s.ThermalFill.BackgroundColor3=cfg.ThermalCornerFill s.ThermalFill.BackgroundTransparency=breathe s.ThermalFill.Visible=true updateCorners(s.ThermalCorner,pos,w,h,cfg.ThermalCornerLine) else s.ThermalFill.Visible=false hideList(s.ThermalCorner) end
+   if cfg.Health and dist<=cfg.HealthMaxDistance then updateHealth(s.Health,s.HealthBack,s.HealthText,hum,pos,w,h,cfg.HealthWidth,cfg.HealthTextColor) else s.Health.Visible=false s.HealthBack.Visible=false s.HealthText.Visible=false end
+   if cfg.NameDistance and dist<=cfg.NameMaxDistance then updateNameDistance(s.Name,s.Distance,plr,pos,w,h,dist) else s.Name.Visible=false s.Distance.Visible=false end
+   if cfg.Skeleton then updateSkeleton(s.Skeleton,char,cfg.SkeletonColor) else hideList(s.Skeleton) end
+   if cfg.Tracers then local vp=cam.ViewportSize local start=cfg.TracerCenter and Vector2.new(vp.X/2,vp.Y/2) or Vector2.new(vp.X/2,vp.Y) setLine(s.Tracer,start,pos,cfg.TracerThickness,cfg.TracerColor) else s.Tracer.Visible=false end
+   if cfg.Box3D then update3D(s.Box3D,root,cfg.Box3DColor) else hideList(s.Box3D) end
+   if cfg.ESP and dist<=cfg.ESPMaxDistance and teamPass(plr) then
+    local breathe=math.clamp(math.atan(math.sin(os.clock()*2))*2/math.pi,0,1) s.PackChams.Adornee=char s.PackChams.Enabled=true s.PackChams.FillColor=Color3.fromRGB(119,120,255) s.PackChams.OutlineColor=Color3.fromRGB(119,120,255) s.PackChams.FillTransparency=breathe s.PackChams.OutlineTransparency=breathe
+    s.PackBox.Position=UDim2.fromOffset(pos.X-w/2,pos.Y-h/2) s.PackBox.Size=UDim2.fromOffset(w,h) s.PackBox.Visible=true s.PackGradient.Rotation=(os.clock()*300)%360 updateCorners(s.PackCorners,pos,w,h,Color3.fromRGB(255,255,255))
+    local ratio=math.clamp(hum.Health/math.max(1,hum.MaxHealth),0,1) s.PackHealthBack.Position=UDim2.fromOffset(pos.X-w/2-6,pos.Y-h/2) s.PackHealthBack.Size=UDim2.fromOffset(2.5,h) s.PackHealthBack.Visible=true s.PackHealth.Position=UDim2.fromOffset(pos.X-w/2-6,pos.Y-h/2+h*(1-ratio)) s.PackHealth.Size=UDim2.fromOffset(2.5,h*ratio) s.PackHealth.Visible=true s.PackHealthText.Position=UDim2.fromOffset(pos.X-w/2-6,pos.Y-h/2+h*(1-ratio)+3) s.PackHealthText.Text=tostring(math.floor(ratio*100)) s.PackHealthText.TextColor3=Color3.fromRGB(119,120,255) s.PackHealthText.Visible=hum.Health<hum.MaxHealth
+    local f=friend(plr) s.PackName.Position=UDim2.fromOffset(pos.X,pos.Y-h/2-9) s.PackName.Text=string.format('(<font color="rgb(%d, %d, %d)">%s</font>) %s [%d]',f and 0 or 255,f and 255 or 0,0,f and "F" or "E",plr.Name,math.floor(dist)) s.PackName.Visible=true s.PackDistance.Visible=false s.PackWeapon.Position=UDim2.fromOffset(pos.X,pos.Y+h/2+8) s.PackWeapon.Text="none" s.PackWeapon.Visible=true
+   else s.PackChams.Enabled=false s.PackBox.Visible=false hideList(s.PackCorners) s.PackHealthBack.Visible=false s.PackHealth.Visible=false s.PackHealthText.Visible=false s.PackName.Visible=false s.PackDistance.Visible=false s.PackWeapon.Visible=false end
+  end
+ end end
 end)
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and (input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch) then
-        local d=input.Position-dragStart
-        frame.Position=UDim2.new(frameStart.X.Scale,frameStart.X.Offset+d.X,frameStart.Y.Scale,frameStart.Y.Offset+d.Y)
-    end
-end)
 
-local function label(text,size)
-    local t=Instance.new("TextLabel") t.BackgroundTransparency=1 t.Size=size or UDim2.fromOffset(130,18)
-    t.AnchorPoint=Vector2.new(.5,.5) t.Font=Enum.Font.Code t.TextSize=11 t.TextStrokeTransparency=0 t.TextColor3=Color3.new(1,1,1) t.Text=text or "" t.Parent=canvas
-    return t
-end
-local function line()
-    local f=Instance.new("Frame") f.BorderSizePixel=0 f.AnchorPoint=Vector2.new(.5,.5) f.BackgroundColor3=Color3.new(1,1,1) f.Visible=false f.Parent=canvas return f
-end
-local function setLine(f,a,b,thick,color)
-    local d=b-a if d.Magnitude<.01 then f.Visible=false return end
-    f.Size=UDim2.fromOffset(d.Magnitude,thick or 1)
-    f.Position=UDim2.fromOffset((a.X+b.X)/2,(a.Y+b.Y)/2)
-    f.Rotation=math.deg(math.atan2(d.Y,d.X))
-    f.BackgroundColor3=color or Color3.new(1,1,1) f.Visible=true
-end
+local Chams=makeOption("Chams",function(v) cfg.Chams=v end)
+Chams.CreateToggle({["Name"]="Thermal",["Default"]=true,["Function"]=function(v) cfg.ChamsThermal=v end})
+Chams.CreateColorSlider({["Name"]="Fill Color",["Function"]=function(h,s,v) cfg.ChamsFill=Color3.fromHSV(h,s,v) end})
+Chams.CreateColorSlider({["Name"]="Outline Color",["Function"]=function(h,s,v) cfg.ChamsOutline=Color3.fromHSV(h,s,v) end})
+Chams.CreateSlider({["Name"]="Max Distance",["Min"]=50,["Max"]=1000,["Default"]=200,["Function"]=function(v) cfg.ChamsMaxDistance=v end})
+local Corner=makeOption("Corner Box",function(v) cfg.Corner=v end)
+Corner.CreateColorSlider({["Name"]="Corner Color",["Function"]=function(h,s,v) cfg.CornerLine=Color3.fromHSV(h,s,v) end}) Corner.CreateColorSlider({["Name"]="Fill Color",["Function"]=function(h,s,v) cfg.CornerFill=Color3.fromHSV(h,s,v) end}) Corner.CreateSlider({["Name"]="Max Distance",["Min"]=50,["Max"]=1000,["Default"]=200,["Function"]=function(v) cfg.CornerMaxDistance=v end})
+local Thermal=makeOption("Thermal Corner",function(v) cfg.ThermalCorner=v end)
+Thermal.CreateColorSlider({["Name"]="Corner Color",["Function"]=function(h,s,v) cfg.ThermalCornerLine=Color3.fromHSV(h,s,v) end}) Thermal.CreateColorSlider({["Name"]="Fill Color",["Function"]=function(h,s,v) cfg.ThermalCornerFill=Color3.fromHSV(h,s,v) end}) Thermal.CreateSlider({["Name"]="Max Distance",["Min"]=50,["Max"]=1000,["Default"]=200,["Function"]=function(v) cfg.ThermalCornerMaxDistance=v end})
+local Health=makeOption("HealthBar",function(v) cfg.Health=v end)
+Health.CreateToggle({["Name"]="Health Text",["Default"]=true,["Function"]=function(v) cfg.HealthText=v end}) Health.CreateColorSlider({["Name"]="Health Text Color",["Function"]=function(h,s,v) cfg.HealthTextColor=Color3.fromHSV(h,s,v) end}) Health.CreateSlider({["Name"]="Max Distance",["Min"]=50,["Max"]=1000,["Default"]=200,["Function"]=function(v) cfg.HealthMaxDistance=v end})
+local NameDistance=makeOption("Name + Distance",function(v) cfg.NameDistance=v end)
+NameDistance.CreateToggle({["Name"]="Friend Check",["Default"]=true,["Function"]=function(v) cfg.FriendCheck=v end}) NameDistance.CreateDropdown({["Name"]="Distance Position",["List"]={"Text","Bottom"},["Function"]=function(v) cfg.DistancePosition=v end}) NameDistance.CreateColorSlider({["Name"]="Name Color",["Function"]=function(h,s,v) cfg.NameColor=Color3.fromHSV(h,s,v) end}) NameDistance.CreateColorSlider({["Name"]="Friend Color",["Function"]=function(h,s,v) cfg.FriendColor=Color3.fromHSV(h,s,v) end}) NameDistance.CreateColorSlider({["Name"]="Distance Color",["Function"]=function(h,s,v) cfg.DistanceColor=Color3.fromHSV(h,s,v) end}) NameDistance.CreateSlider({["Name"]="Max Distance",["Min"]=50,["Max"]=1000,["Default"]=200,["Function"]=function(v) cfg.NameMaxDistance=v end})
+local Skeleton=makeOption("Skeleton",function(v) cfg.Skeleton=v end) Skeleton.CreateColorSlider({["Name"]="Color",["Function"]=function(h,s,v) cfg.SkeletonColor=Color3.fromHSV(h,s,v) end})
+local Tracers=makeOption("Tracers",function(v) cfg.Tracers=v end) Tracers.CreateToggle({["Name"]="Start From Center",["Default"]=false,["Function"]=function(v) cfg.TracerCenter=v end}) Tracers.CreateColorSlider({["Name"]="Color",["Function"]=function(h,s,v) cfg.TracerColor=Color3.fromHSV(h,s,v) end}) Tracers.CreateSlider({["Name"]="Thickness",["Min"]=1,["Max"]=5,["Default"]=1,["Function"]=function(v) cfg.TracerThickness=v end})
+local Box3D=makeOption("3D Box",function(v) cfg.Box3D=v end) Box3D.CreateColorSlider({["Name"]="Color",["Function"]=function(h,s,v) cfg.Box3DColor=Color3.fromHSV(h,s,v) end})
+local ESP=makeOption("ESP",function(v) cfg.ESP=v end) ESP.CreateSlider({["Name"]="Max Distance",["Min"]=50,["Max"]=1000,["Default"]=200,["Function"]=function(v) cfg.ESPMaxDistance=v end})
 
-local dummy=Instance.new("Frame")
-dummy.AnchorPoint=Vector2.new(.5,.5) dummy.Position=UDim2.new(.5,0,.53,0) dummy.Size=UDim2.fromOffset(70,180)
-dummy.BackgroundColor3=Color3.fromRGB(72,74,82) dummy.BorderSizePixel=0 dummy.Parent=canvas
-local dc=Instance.new("UICorner") dc.CornerRadius=UDim.new(0,5) dc.Parent=dummy
-local ds=Instance.new("UIStroke") ds.Thickness=1 ds.Color=Color3.fromRGB(95,97,107) ds.Parent=dummy
-
-local head=Instance.new("Frame") head.AnchorPoint=Vector2.new(.5,.5) head.Position=UDim2.new(.5,0,0,-26) head.Size=UDim2.fromOffset(40,40) head.BorderSizePixel=0 head.BackgroundColor3=dummy.BackgroundColor3 head.Parent=dummy
-local hc=Instance.new("UICorner") hc.CornerRadius=UDim.new(0,6) hc.Parent=head
-
-local nameLabel=label("(F) Dummy [87]",UDim2.fromOffset(180,18)) nameLabel.Position=UDim2.new(.5,0,.13,0)
-local distLabel=label("87 meters",UDim2.fromOffset(160,18)) distLabel.Position=UDim2.new(.5,0,.88,0)
-local weaponLabel=label("Weapon",UDim2.fromOffset(120,16)) weaponLabel.Position=UDim2.new(.5,0,.82,0) weaponLabel.TextColor3=Color3.fromRGB(119,120,255)
-local healthText=label("76",UDim2.fromOffset(36,16)) healthText.Position=UDim2.new(.33,0,.44,0)
-
-local healthBack=Instance.new("Frame") healthBack.BorderSizePixel=0 healthBack.BackgroundColor3=Color3.new(0,0,0) healthBack.Parent=canvas
-local health=Instance.new("Frame") health.BorderSizePixel=0 health.BackgroundColor3=Color3.new(1,1,1) health.Parent=canvas
-local grad=Instance.new("UIGradient") grad.Rotation=-90 grad.Parent=health
-grad.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(200,0,0)),ColorSequenceKeypoint.new(.5,Color3.fromRGB(60,60,125)),ColorSequenceKeypoint.new(1,Color3.fromRGB(119,120,255))})
-
-local fill=Instance.new("Frame") fill.BackgroundTransparency=.75 fill.BorderSizePixel=0 fill.Visible=false fill.Parent=canvas
-local corners={} for i=1,8 do corners[i]=line() end
-local skeleton={} for i=1,14 do skeleton[i]=line() end
-local box3d={} for i=1,12 do box3d[i]=line() end
-local tracer=line()
-
-local badge=label("ATTACHED VISUALS",UDim2.fromOffset(160,16)) badge.AnchorPoint=Vector2.new(.5,0) badge.Position=UDim2.new(.5,0,0,5) badge.TextSize=9 badge.TextColor3=Color3.fromRGB(150,152,165)
-
-local function hideLines(tbl) for _,f in ipairs(tbl) do f.Visible=false end end
-
-local function update()
-    gui.Enabled=state.Preview
-    if not state.Preview then return end
-    local sz=canvas.AbsoluteSize if sz.X<10 or sz.Y<10 then return end
-    local cx,cy=sz.X*.5,sz.Y*.53
-    local w,h=70,180
-    local top,left,right,bottom=cy-h/2,cx-w/2,cx+w/2,cy+h/2
-
-    local pack=state.Pack
-    local chams=state.Chams or pack
-    local thermalCorner=state.ThermalCorner or pack
-    local corner=state.Corner or pack
-    local healthOn=state.Health or pack
-    local nameOn=state.NameDistance or pack
-    local skel=state.Skeleton or pack
-    local tr=state.Tracers or pack
-    local box=state.Box3D or pack
-
-    local breathe=.5+(math.sin(os.clock()*2)+1)*.15
-    if chams then
-        local c=state.ChamsColor
-        dummy.BackgroundColor3=c head.BackgroundColor3=c
-        dummy.BackgroundTransparency=state.Thermal and breathe or .18
-        head.BackgroundTransparency=dummy.BackgroundTransparency
-        ds.Color=c ds.Thickness=2 ds.Transparency=state.Thermal and math.clamp(breathe-.25,0,.7) or 0
-    else
-        dummy.BackgroundColor3=Color3.fromRGB(72,74,82) head.BackgroundColor3=dummy.BackgroundColor3
-        dummy.BackgroundTransparency=0 head.BackgroundTransparency=0 ds.Color=Color3.fromRGB(95,97,107) ds.Thickness=1 ds.Transparency=0
-    end
-
-    fill.Visible=corner or thermalCorner
-    if fill.Visible then
-        fill.Position=UDim2.fromOffset(left,top) fill.Size=UDim2.fromOffset(w,h)
-        fill.BackgroundColor3=thermalCorner and state.ThermalFill or state.CornerFill
-        fill.BackgroundTransparency=thermalCorner and breathe or .75
-    end
-
-    local cw,ch=w/5,h/5
-    local cpairs={
-        {Vector2.new(left,top),Vector2.new(left+cw,top)},{Vector2.new(left,top),Vector2.new(left,top+ch)},
-        {Vector2.new(right,top),Vector2.new(right-cw,top)},{Vector2.new(right,top),Vector2.new(right,top+ch)},
-        {Vector2.new(left,bottom),Vector2.new(left+cw,bottom)},{Vector2.new(left,bottom),Vector2.new(left,bottom-ch)},
-        {Vector2.new(right,bottom),Vector2.new(right-cw,bottom)},{Vector2.new(right,bottom),Vector2.new(right,bottom-ch)},
-    }
-    if corner or thermalCorner then for i,p in ipairs(cpairs) do setLine(corners[i],p[1],p[2],1,state.CornerColor) end else hideLines(corners) end
-
-    healthBack.Visible=healthOn health.Visible=healthOn healthText.Visible=healthOn and state.HealthText
-    if healthOn then
-        local ratio=state.Health
-        healthBack.Position=UDim2.fromOffset(left-8,top) healthBack.Size=UDim2.fromOffset(4,h)
-        health.Position=UDim2.fromOffset(left-8,top+h*(1-ratio)) health.Size=UDim2.fromOffset(4,h*ratio)
-        healthText.Position=UDim2.fromOffset(left-22,top+h*(1-ratio)) healthText.Text=tostring(math.floor(ratio*100)) healthText.TextColor3=Color3.fromRGB(119,120,255)
-    end
-
-    nameLabel.Visible=nameOn distLabel.Visible=nameOn weaponLabel.Visible=pack
-    if nameOn then
-        local flag=state.Friend and "F" or "E"
-        nameLabel.Text="("..flag..") Dummy [87]" nameLabel.TextColor3=state.Friend and state.FriendColor or state.NameColor
-        distLabel.TextColor3=state.DistanceColor
-    end
-
-    local pts={
-        Head=Vector2.new(cx,top-26),Chest=Vector2.new(cx,top+42),Hip=Vector2.new(cx,top+94),
-        LShoulder=Vector2.new(cx-34,top+44),LElbow=Vector2.new(cx-46,top+83),LHand=Vector2.new(cx-50,top+118),
-        RShoulder=Vector2.new(cx+34,top+44),RElbow=Vector2.new(cx+46,top+83),RHand=Vector2.new(cx+50,top+118),
-        LKnee=Vector2.new(cx-18,top+142),LFoot=Vector2.new(cx-22,bottom+4),RKnee=Vector2.new(cx+18,top+142),RFoot=Vector2.new(cx+22,bottom+4),
-    }
-    local bones={{"Head","Chest"},{"Chest","Hip"},{"Chest","LShoulder"},{"LShoulder","LElbow"},{"LElbow","LHand"},{"Chest","RShoulder"},{"RShoulder","RElbow"},{"RElbow","RHand"},{"Hip","LKnee"},{"LKnee","LFoot"},{"Hip","RKnee"},{"RKnee","RFoot"}}
-    if skel then for i,b in ipairs(bones) do setLine(skeleton[i],pts[b[1]],pts[b[2]],1,state.SkeletonColor) end for i=#bones+1,#skeleton do skeleton[i].Visible=false end else hideLines(skeleton) end
-
-    if tr then
-        local start
-        if state.TracerOrigin=="Center" then start=Vector2.new(sz.X/2,sz.Y/2)
-        elseif state.TracerOrigin=="Top" then start=Vector2.new(sz.X/2,0)
-        elseif state.TracerOrigin=="Mouse" then
-            local m=UserInputService:GetMouseLocation() local abs=canvas.AbsolutePosition start=Vector2.new(math.clamp(m.X-abs.X,0,sz.X),math.clamp(m.Y-abs.Y,0,sz.Y))
-        else start=Vector2.new(sz.X/2,sz.Y) end
-        setLine(tracer,start,Vector2.new(cx,cy),state.TracerThickness,state.TracerColor)
-    else tracer.Visible=false end
-
-    if box then
-        local ox,oy=14,-12
-        local a=Vector2.new(left,top) local b=Vector2.new(right,top) local c=Vector2.new(right,bottom) local d=Vector2.new(left,bottom)
-        local a2=a+Vector2.new(ox,oy) local b2=b+Vector2.new(ox,oy) local c2=c+Vector2.new(ox,oy) local d2=d+Vector2.new(ox,oy)
-        local edges={{a,b},{b,c},{c,d},{d,a},{a2,b2},{b2,c2},{c2,d2},{d2,a2},{a,a2},{b,b2},{c,c2},{d,d2}}
-        for i,e in ipairs(edges) do setLine(box3d[i],e[1],e[2],1,state.Box3DColor) end
-    else hideLines(box3d) end
-end
-
-local Preview=opt("Attached Preview",function(v) state.Preview=v update() end)
-
-local Chams=opt("Chams Style",function(v) state.Chams=v end)
-Chams.CreateToggle({["Name"]="Thermal",["Default"]=true,["Function"]=function(v) state.Thermal=v end})
-Chams.CreateColorSlider({["Name"]="Color",["Function"]=function(h,s,v) state.ChamsColor=Color3.fromHSV(h,s,v) end})
-
-local Corner=opt("Corner Box",function(v) state.Corner=v end)
-Corner.CreateColorSlider({["Name"]="Corner Color",["Function"]=function(h,s,v) state.CornerColor=Color3.fromHSV(h,s,v) end})
-Corner.CreateColorSlider({["Name"]="Fill Color",["Function"]=function(h,s,v) state.CornerFill=Color3.fromHSV(h,s,v) end})
-
-local Thermal=opt("Thermal Corner",function(v) state.ThermalCorner=v end)
-Thermal.CreateColorSlider({["Name"]="Fill Color",["Function"]=function(h,s,v) state.ThermalFill=Color3.fromHSV(h,s,v) end})
-
-local Health=opt("HealthBar",function(v) state.Health=v end)
-Health.CreateToggle({["Name"]="Health Text",["Default"]=true,["Function"]=function(v) state.HealthText=v end})
-Health.CreateSlider({["Name"]="Preview Health",["Min"]=1,["Max"]=100,["Default"]=76,["Function"]=function(v) state.Health=v/100 end})
-
-local NameDistance=opt("Name + Distance",function(v) state.NameDistance=v end)
-NameDistance.CreateToggle({["Name"]="Friend",["Default"]=true,["Function"]=function(v) state.Friend=v end})
-NameDistance.CreateColorSlider({["Name"]="Name Color",["Function"]=function(h,s,v) state.NameColor=Color3.fromHSV(h,s,v) end})
-NameDistance.CreateColorSlider({["Name"]="Friend Color",["Function"]=function(h,s,v) state.FriendColor=Color3.fromHSV(h,s,v) end})
-NameDistance.CreateColorSlider({["Name"]="Distance Color",["Function"]=function(h,s,v) state.DistanceColor=Color3.fromHSV(h,s,v) end})
-
-local Skeleton=opt("Skeleton Style",function(v) state.Skeleton=v end)
-Skeleton.CreateColorSlider({["Name"]="Color",["Function"]=function(h,s,v) state.SkeletonColor=Color3.fromHSV(h,s,v) end})
-
-local Tracers=opt("Tracers Style",function(v) state.Tracers=v end)
-Tracers.CreateDropdown({["Name"]="Origin",["List"]={"Bottom","Center","Mouse","Top"},["Function"]=function(v) state.TracerOrigin=v end})
-Tracers.CreateColorSlider({["Name"]="Color",["Function"]=function(h,s,v) state.TracerColor=Color3.fromHSV(h,s,v) end})
-Tracers.CreateSlider({["Name"]="Thickness",["Min"]=1,["Max"]=3,["Default"]=1,["Function"]=function(v) state.TracerThickness=v end})
-
-local Box3D=opt("3D Box Style",function(v) state.Box3D=v end)
-Box3D.CreateColorSlider({["Name"]="Color",["Function"]=function(h,s,v) state.Box3DColor=Color3.fromHSV(h,s,v) end})
-
-local Pack=opt("ESP Pack",function(v) state.Pack=v end)
-
-RunService.RenderStepped:Connect(update)
-
-pcall(function() GuiLibrary["CreateNotification"]("Yokai","Attached Visuals preview styles loaded",3) end)
+pcall(function() GuiLibrary["CreateNotification"]("Yokai","Visuals integrated and functional",3) end)
