@@ -33,8 +33,6 @@ if not ok then
 end
 
 -- Visuals V4 is the only post-visual layer.
--- Older VisualsV2/V3 and LocalVisualTweaks are intentionally not loaded so
--- they cannot collide with the original Render module names.
 local visualsV4 = game:HttpGet(BASE .. "VisualsV4.lua", true)
 local visualOk, visualErr = pcall(function()
     loadstring(visualsV4)()
@@ -46,9 +44,7 @@ if not visualOk then
     end)
 end
 
--- Local-only runtime corrections that need to run after Visuals V4:
--- FOV is locked after the camera step (works in first person) and SelfChams
--- switches to arms/hands only while the local camera is in first person.
+-- First-person local FOV + initial SelfChams runtime correction.
 local localFixes = game:HttpGet(BASE .. "LocalRuntimeFixes.lua", true)
 local fixesOk, fixesErr = pcall(function()
     loadstring(localFixes)()
@@ -57,5 +53,31 @@ if not fixesOk then
     warn("LocalRuntimeFixes failed: " .. tostring(fixesErr))
     pcall(function()
         shared.GuiLibrary["CreateNotification"]("Yokai", "Local runtime fixes failed: " .. tostring(fixesErr), 8)
+    end)
+end
+
+-- Final SelfChams material pass. Loaded after LocalRuntimeFixes so it can replace
+-- that SelfChams control and force actual Roblox materials on arms/viewmodels.
+local armFixes = game:HttpGet(BASE .. "ArmMaterialFixes.lua", true)
+local armOk, armErr = pcall(function()
+    loadstring(armFixes)()
+end)
+if not armOk then
+    warn("ArmMaterialFixes failed: " .. tostring(armErr))
+    pcall(function()
+        shared.GuiLibrary["CreateNotification"]("Yokai", "Arm material fixes failed: " .. tostring(armErr), 8)
+    end)
+end
+
+-- Final local World/Visual patch: local-only BulletTracer, HitSound in World with
+-- preview/presets, World FOV removal, and optional GunChams glow.
+local worldFixes = game:HttpGet(BASE .. "LocalWorldFixes.lua", true)
+local worldOk, worldErr = pcall(function()
+    loadstring(worldFixes)()
+end)
+if not worldOk then
+    warn("LocalWorldFixes failed: " .. tostring(worldErr))
+    pcall(function()
+        shared.GuiLibrary["CreateNotification"]("Yokai", "Local World fixes failed: " .. tostring(worldErr), 8)
     end)
 end
