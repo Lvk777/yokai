@@ -1,3 +1,4 @@
 local BASE = "https://raw.githubusercontent.com/Lvk777/yokai/refs/heads/custom/curated-yokai-final/"
 loadstring(game:HttpGet(BASE .. "main.lua", true))()
 loadstring(game:HttpGet(BASE .. "CuratedBootstrap.lua", true))()
+loadstring(game:HttpGet(BASE .. "SimpleAntiFlingFinal.lua", true))()
