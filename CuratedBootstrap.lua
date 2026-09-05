@@ -156,3 +156,14 @@ end)
 if not visualsIndependentOk then
     warn("VisualsIndependentWindowFix failed: " .. tostring(visualsIndependentErr))
 end
+
+-- Single working Visuals preview plus Preview/Studio-only wallcheck colors and
+-- Top/Bottom/Center/Mouse tracer-origin controls. Loaded last so stale previews
+-- and earlier Preview controls cannot overwrite it.
+local previewControls = game:HttpGet(BASE .. "VisualsPreviewControlsFix.lua", true)
+local previewControlsOk, previewControlsErr = pcall(function()
+    loadstring(previewControls)()
+end)
+if not previewControlsOk then
+    warn("VisualsPreviewControlsFix failed: " .. tostring(previewControlsErr))
+end
