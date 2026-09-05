@@ -81,3 +81,18 @@ if not worldOk then
         shared.GuiLibrary["CreateNotification"]("Yokai", "Local World fixes failed: " .. tostring(worldErr), 8)
     end)
 end
+
+-- Isolated final patch requested after runtime screenshots. This intentionally
+-- replaces only SelfChams, ChangeSkydome and BulletTracer, leaving every other
+-- module untouched. It must load last so earlier compatibility patches cannot
+-- overwrite these three controls.
+local finalLocal = game:HttpGet(BASE .. "FinalLocalVisualFixes.lua", true)
+local finalOk, finalErr = pcall(function()
+    loadstring(finalLocal)()
+end)
+if not finalOk then
+    warn("FinalLocalVisualFixes failed: " .. tostring(finalErr))
+    pcall(function()
+        shared.GuiLibrary["CreateNotification"]("Yokai", "Final local visual fixes failed: " .. tostring(finalErr), 8)
+    end)
+end
