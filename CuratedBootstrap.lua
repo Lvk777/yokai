@@ -136,3 +136,13 @@ if not cosmeticOk then
         shared.GuiLibrary["CreateNotification"]("Yokai", "Cosmetic runtime fixes failed: " .. tostring(cosmeticErr), 8)
     end)
 end
+
+-- Keep the original Arrows logic/asset, only scale the indicator down so the
+-- chevrons are smaller and visually thinner like the earlier appearance.
+local arrowStyle = game:HttpGet(BASE .. "ArrowStyleFix.lua", true)
+local arrowOk, arrowErr = pcall(function()
+    loadstring(arrowStyle)()
+end)
+if not arrowOk then
+    warn("ArrowStyleFix failed: " .. tostring(arrowErr))
+end
