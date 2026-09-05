@@ -45,3 +45,17 @@ if not visualOk then
         shared.GuiLibrary["CreateNotification"]("Yokai", "Visuals V4 failed to load: " .. tostring(visualErr), 8)
     end)
 end
+
+-- Local-only runtime corrections that need to run after Visuals V4:
+-- FOV is locked after the camera step (works in first person) and SelfChams
+-- switches to arms/hands only while the local camera is in first person.
+local localFixes = game:HttpGet(BASE .. "LocalRuntimeFixes.lua", true)
+local fixesOk, fixesErr = pcall(function()
+    loadstring(localFixes)()
+end)
+if not fixesOk then
+    warn("LocalRuntimeFixes failed: " .. tostring(fixesErr))
+    pcall(function()
+        shared.GuiLibrary["CreateNotification"]("Yokai", "Local runtime fixes failed: " .. tostring(fixesErr), 8)
+    end)
+end
