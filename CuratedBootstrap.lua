@@ -13,7 +13,7 @@ pcall(function()
 end)
 
 -- Install temporary GUI hooks before CuratedModules runs so Yokai's original
--- ESP (including its original 3D mode) is preserved.
+-- modules can initialize before the curated replacements are applied.
 local prepatch = game:HttpGet(BASE .. "CuratedPrePatch.lua", true)
 loadstring(prepatch)()
 
@@ -33,8 +33,7 @@ if not ok then
     end)
 end
 
--- Local-only visual / QoL controls (self chams, FOV, night/brightness,
--- and local inventory). Kept separate from player-targeting modules.
+-- Compatibility layer kept before V2 so older profiles/settings can be read.
 local localVisuals = game:HttpGet(BASE .. "LocalVisualTweaks.lua", true)
 local localOk, localErr = pcall(function()
     loadstring(localVisuals)()
@@ -43,5 +42,19 @@ if not localOk then
     warn("LocalVisualTweaks failed: " .. tostring(localErr))
     pcall(function()
         shared.GuiLibrary["CreateNotification"]("Yokai", "Local visual tweaks failed to load: " .. tostring(localErr), 8)
+    end)
+end
+
+-- Final visual layer: dedicated Visuals tab, unified ESPs, self chams,
+-- smaller arrows, Trail glow, corrected Night/Brightness, extra skydomes,
+-- hitsound presets and the replicated inventory viewer.
+local visualsV2 = game:HttpGet(BASE .. "VisualsV2.lua", true)
+local visualsOk, visualsErr = pcall(function()
+    loadstring(visualsV2)()
+end)
+if not visualsOk then
+    warn("VisualsV2 failed: " .. tostring(visualsErr))
+    pcall(function()
+        shared.GuiLibrary["CreateNotification"]("Yokai", "Visuals V2 failed to load: " .. tostring(visualsErr), 8)
     end)
 end
