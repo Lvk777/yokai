@@ -179,3 +179,16 @@ if not visualsUXOk then
         shared.GuiLibrary["CreateNotification"]("Yokai", "Visuals UX final fix failed: " .. tostring(visualsUXErr), 8)
     end)
 end
+
+-- Final safe polish: Utility Rejoin plus Preview/Studio name, corner-fill animation,
+-- health palettes/text and wallcheck color behavior. Loaded last by design.
+local rejoinPreview = game:HttpGet(BASE .. "UtilityRejoinPreviewPolish.lua", true)
+local rejoinPreviewOk, rejoinPreviewErr = pcall(function()
+    loadstring(rejoinPreview)()
+end)
+if not rejoinPreviewOk then
+    warn("UtilityRejoinPreviewPolish failed: " .. tostring(rejoinPreviewErr))
+    pcall(function()
+        shared.GuiLibrary["CreateNotification"]("Yokai", "Rejoin/preview polish failed: " .. tostring(rejoinPreviewErr), 8)
+    end)
+end
