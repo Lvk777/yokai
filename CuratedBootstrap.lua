@@ -157,13 +157,25 @@ if not visualsIndependentOk then
     warn("VisualsIndependentWindowFix failed: " .. tostring(visualsIndependentErr))
 end
 
--- Single working Visuals preview plus Preview/Studio-only wallcheck colors and
--- Top/Bottom/Center/Mouse tracer-origin controls. Loaded last so stale previews
--- and earlier Preview controls cannot overwrite it.
+-- Preview/Studio-only wallcheck colors and tracer-origin controls.
 local previewControls = game:HttpGet(BASE .. "VisualsPreviewControlsFix.lua", true)
 local previewControlsOk, previewControlsErr = pcall(function()
     loadstring(previewControls)()
 end)
 if not previewControlsOk then
     warn("VisualsPreviewControlsFix failed: " .. tostring(previewControlsErr))
+end
+
+-- Definitive Visuals UX pass: one polished preview, configurable Preview/Studio
+-- wallcheck colors, a single tracer Origin selector and robust NoMenuFog restore.
+-- This intentionally loads last so older UI states cannot override it.
+local visualsUX = game:HttpGet(BASE .. "VisualsUXFinalFix.lua", true)
+local visualsUXOk, visualsUXErr = pcall(function()
+    loadstring(visualsUX)()
+end)
+if not visualsUXOk then
+    warn("VisualsUXFinalFix failed: " .. tostring(visualsUXErr))
+    pcall(function()
+        shared.GuiLibrary["CreateNotification"]("Yokai", "Visuals UX final fix failed: " .. tostring(visualsUXErr), 8)
+    end)
 end
