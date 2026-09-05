@@ -32,16 +32,16 @@ if not ok then
     end)
 end
 
--- Visuals V3 is the only post-visual layer.
--- LocalVisualTweaks.lua and VisualsV2.lua are intentionally not loaded anymore,
--- because they replaced/collided with original Render module names.
-local visualsV3 = game:HttpGet(BASE .. "VisualsV3.lua", true)
+-- Visuals V4 is the only post-visual layer.
+-- Older VisualsV2/V3 and LocalVisualTweaks are intentionally not loaded so
+-- they cannot collide with the original Render module names.
+local visualsV4 = game:HttpGet(BASE .. "VisualsV4.lua", true)
 local visualOk, visualErr = pcall(function()
-    loadstring(visualsV3)()
+    loadstring(visualsV4)()
 end)
 if not visualOk then
-    warn("VisualsV3 failed: " .. tostring(visualErr))
+    warn("VisualsV4 failed: " .. tostring(visualErr))
     pcall(function()
-        shared.GuiLibrary["CreateNotification"]("Yokai", "Visuals V3 failed to load: " .. tostring(visualErr), 8)
+        shared.GuiLibrary["CreateNotification"]("Yokai", "Visuals V4 failed to load: " .. tostring(visualErr), 8)
     end)
 end
