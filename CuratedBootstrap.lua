@@ -146,3 +146,17 @@ end)
 if not arrowOk then
     warn("ArrowStyleFix failed: " .. tostring(arrowErr))
 end
+
+-- Final viewmodel/audio pass. This intentionally loads last and replaces only
+-- SelfChams, GunChams and HitSound so weapon changes cannot reintroduce the old
+-- arm classification or the game's native hit-confirm sound.
+local viewmodelAudio = game:HttpGet(BASE .. "ViewmodelAudioFixes.lua", true)
+local viewmodelAudioOk, viewmodelAudioErr = pcall(function()
+    loadstring(viewmodelAudio)()
+end)
+if not viewmodelAudioOk then
+    warn("ViewmodelAudioFixes failed: " .. tostring(viewmodelAudioErr))
+    pcall(function()
+        shared.GuiLibrary["CreateNotification"]("Yokai", "Viewmodel/audio fixes failed: " .. tostring(viewmodelAudioErr), 8)
+    end)
+end
