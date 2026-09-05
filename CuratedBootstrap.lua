@@ -96,3 +96,16 @@ if not finalOk then
         shared.GuiLibrary["CreateNotification"]("Yokai", "Final local visual fixes failed: " .. tostring(finalErr), 8)
     end)
 end
+
+-- GunChams should use one fixed user-selected color. This loads last so saved
+-- visibility-color state cannot make the local weapon switch red/green near walls.
+local gunColorFix = game:HttpGet(BASE .. "GunChamsColorFix.lua", true)
+local gunColorOk, gunColorErr = pcall(function()
+    loadstring(gunColorFix)()
+end)
+if not gunColorOk then
+    warn("GunChamsColorFix failed: " .. tostring(gunColorErr))
+    pcall(function()
+        shared.GuiLibrary["CreateNotification"]("Yokai", "GunChams color fix failed: " .. tostring(gunColorErr), 8)
+    end)
+end
