@@ -147,3 +147,12 @@ if not harmonyOk then
         shared.GuiLibrary["CreateNotification"]("Yokai", "Runtime harmony failed: " .. tostring(harmonyErr), 8)
     end)
 end
+
+-- Final UI-only pass: Visuals opens independently and never closes the other windows.
+local visualsIndependent = game:HttpGet(BASE .. "VisualsIndependentWindowFix.lua", true)
+local visualsIndependentOk, visualsIndependentErr = pcall(function()
+    loadstring(visualsIndependent)()
+end)
+if not visualsIndependentOk then
+    warn("VisualsIndependentWindowFix failed: " .. tostring(visualsIndependentErr))
+end
