@@ -32,3 +32,16 @@ if not ok then
         shared.GuiLibrary["CreateNotification"]("Yokai", "Curated modules failed to load: " .. tostring(err), 8)
     end)
 end
+
+-- Local-only visual / QoL controls (self chams, FOV, night/brightness,
+-- and local inventory). Kept separate from player-targeting modules.
+local localVisuals = game:HttpGet(BASE .. "LocalVisualTweaks.lua", true)
+local localOk, localErr = pcall(function()
+    loadstring(localVisuals)()
+end)
+if not localOk then
+    warn("LocalVisualTweaks failed: " .. tostring(localErr))
+    pcall(function()
+        shared.GuiLibrary["CreateNotification"]("Yokai", "Local visual tweaks failed to load: " .. tostring(localErr), 8)
+    end)
+end
