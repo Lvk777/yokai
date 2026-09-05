@@ -1,1 +1,2 @@
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Askire-ux/yokai/main/main.lua", true))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Lvk777/yokai/custom/curated-yokai-final/main.lua", true))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Lvk777/yokai/custom/curated-yokai-final/CuratedBootstrap.lua", true))()
