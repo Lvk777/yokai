@@ -1,12 +1,14 @@
 -- Compatibility shim for CuratedModules.lua
--- Preserve Yokai's original ESP (including the original 2D / 3D / Skeleton modes)
--- and prevent the replacement ESP/3D box option from being exposed.
+-- Preserve Yokai's original Render window exactly as loaded by AnyGame.lua.
+-- CuratedModules is still allowed to change Combat/Movement/Utility/World,
+-- but it must not delete or replace original Render modules.
 
 repeat task.wait() until shared.GuiLibrary and shared.YokaiFullyLoaded
 
 local GuiLibrary = shared.GuiLibrary
 local objects = GuiLibrary["ObjectsThatCanBeSaved"]
-local renderWindow = objects["RenderWindow"] and objects["RenderWindow"]["Api"]
+local renderRecord = objects["RenderWindow"]
+local renderWindow = renderRecord and renderRecord["Api"]
 
 if not renderWindow then
     warn("CuratedPrePatch: RenderWindow not found")
@@ -16,10 +18,30 @@ end
 local oldRemoveObject = GuiLibrary["RemoveObject"]
 local oldCreateOptionsButton = renderWindow["CreateOptionsButton"]
 
+local function belongsToOriginalRender(objname)
+    local rec = objects[objname]
+    local obj = rec and rec["Object"]
+    if not obj or typeof(obj) ~= "Instance" then return false end
+
+    local roots = {
+        renderRecord and renderRecord["Object"],
+        renderRecord and renderRecord["ChildrenObject"],
+    }
+
+    for _, root in ipairs(roots) do
+        if root and typeof(root) == "Instance" then
+            if obj == root or obj:IsDescendantOf(root) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 -- CuratedModules removes every OptionsButton that is not in its keep table.
--- Do not allow it to remove the original ESP module.
+-- Block deletion of anything that already belongs to the original Render window.
 GuiLibrary["RemoveObject"] = function(objname)
-    if objname == "ESPOptionsButton" then
+    if belongsToOriginalRender(objname) then
         return
     end
     return oldRemoveObject(objname)
@@ -40,6 +62,9 @@ local function makeDummyOptionsApi(name)
     dummy.CreateSlider = function(args)
         return {Value = (args and args.Default) or 0, Object = nil}
     end
+    dummy.CreateTwoSlider = function(args)
+        return {Value = (args and args.Default) or 0, Value2 = (args and args.Default2) or 0, Object = nil}
+    end
     dummy.CreateToggle = function(args)
         return {Enabled = (args and args.Default) or false, Object = nil}
     end
@@ -50,40 +75,34 @@ local function makeDummyOptionsApi(name)
     dummy.CreateTextBox = function()
         return {Value = "", Object = nil}
     end
+    dummy.CreateTextList = function()
+        return {ObjectList = {}, Object = nil}
+    end
     dummy.CreateTargetWindow = function()
         return {Players = {Enabled = true}}
     end
     return dummy
 end
 
+-- CuratedModules previously recreated these visual modules in Render.
+-- Swallow those replacement creations so the original Render implementation
+-- remains untouched. Visuals V3 creates its own uniquely-named modules later.
+local curatedRenderReplacements = {
+    ESP = true,
+    Chams = true,
+    Health = true,
+    Name = true,
+    Distance = true,
+    Box = true,
+    Tracers = true,
+    GunChams = true,
+}
+
 renderWindow["CreateOptionsButton"] = function(args)
-    -- CuratedModules used to replace the original ESP with a custom Skeleton ESP.
-    -- Swallow that creation so the real original ESP remains untouched.
-    if args and args["Name"] == "ESP" and objects["ESPOptionsButton"] then
-        return makeDummyOptionsApi("ESP")
+    if args and curatedRenderReplacements[args["Name"]] then
+        return makeDummyOptionsApi(args["Name"])
     end
-
-    local api = oldCreateOptionsButton(args)
-
-    -- Keep the new Box replacement limited to the supplied Corner/Thermal styles.
-    -- The original Yokai ESP remains responsible for 3D ESP.
-    if args and args["Name"] == "Box" and api and api.CreateDropdown then
-        local oldCreateDropdown = api.CreateDropdown
-        api.CreateDropdown = function(dropArgs)
-            if dropArgs and dropArgs["Name"] == "Mode" and type(dropArgs["List"]) == "table" then
-                local filtered = {}
-                for _, value in ipairs(dropArgs["List"]) do
-                    if value ~= "3D" then
-                        table.insert(filtered, value)
-                    end
-                end
-                dropArgs["List"] = filtered
-            end
-            return oldCreateDropdown(dropArgs)
-        end
-    end
-
-    return api
+    return oldCreateOptionsButton(args)
 end
 
 shared.YokaiCuratedRestoreGuiHooks = function()
