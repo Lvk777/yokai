@@ -12,8 +12,7 @@ pcall(function()
     end
 end)
 
--- Install temporary GUI hooks before CuratedModules runs so Yokai's original
--- modules can initialize before the curated replacements are applied.
+-- Protect Yokai's original Render window before CuratedModules trims the other tabs.
 local prepatch = game:HttpGet(BASE .. "CuratedPrePatch.lua", true)
 loadstring(prepatch)()
 
@@ -33,28 +32,16 @@ if not ok then
     end)
 end
 
--- Compatibility layer kept before V2 so older profiles/settings can be read.
-local localVisuals = game:HttpGet(BASE .. "LocalVisualTweaks.lua", true)
-local localOk, localErr = pcall(function()
-    loadstring(localVisuals)()
+-- Visuals V3 is the only post-visual layer.
+-- LocalVisualTweaks.lua and VisualsV2.lua are intentionally not loaded anymore,
+-- because they replaced/collided with original Render module names.
+local visualsV3 = game:HttpGet(BASE .. "VisualsV3.lua", true)
+local visualOk, visualErr = pcall(function()
+    loadstring(visualsV3)()
 end)
-if not localOk then
-    warn("LocalVisualTweaks failed: " .. tostring(localErr))
+if not visualOk then
+    warn("VisualsV3 failed: " .. tostring(visualErr))
     pcall(function()
-        shared.GuiLibrary["CreateNotification"]("Yokai", "Local visual tweaks failed to load: " .. tostring(localErr), 8)
-    end)
-end
-
--- Final visual layer: dedicated Visuals tab, unified ESPs, self chams,
--- smaller arrows, Trail glow, corrected Night/Brightness, extra skydomes,
--- hitsound presets and the replicated inventory viewer.
-local visualsV2 = game:HttpGet(BASE .. "VisualsV2.lua", true)
-local visualsOk, visualsErr = pcall(function()
-    loadstring(visualsV2)()
-end)
-if not visualsOk then
-    warn("VisualsV2 failed: " .. tostring(visualsErr))
-    pcall(function()
-        shared.GuiLibrary["CreateNotification"]("Yokai", "Visuals V2 failed to load: " .. tostring(visualsErr), 8)
+        shared.GuiLibrary["CreateNotification"]("Yokai", "Visuals V3 failed to load: " .. tostring(visualErr), 8)
     end)
 end
