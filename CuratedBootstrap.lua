@@ -160,3 +160,24 @@ if not viewmodelAudioOk then
         shared.GuiLibrary["CreateNotification"]("Yokai", "Viewmodel/audio fixes failed: " .. tostring(viewmodelAudioErr), 8)
     end)
 end
+
+-- Replace all older click/hold-driven BulletTracer versions. This tracer is
+-- emitted only when the local weapon itself produces a shot signal (ammo drop,
+-- gunshot/muzzle event or native local tracer activation).
+local shotTracer = game:HttpGet(BASE .. "ShotDrivenTracerFix.lua", true)
+local shotTracerOk, shotTracerErr = pcall(function()
+    loadstring(shotTracer)()
+end)
+if not shotTracerOk then
+    warn("ShotDrivenTracerFix failed: " .. tostring(shotTracerErr))
+end
+
+-- User-supplied ESP styles, adapted into the Visuals tab as a local draggable
+-- preview/test layer. These do not target live players.
+local attachedVisuals = game:HttpGet(BASE .. "AttachedVisualsPreview.lua", true)
+local attachedVisualsOk, attachedVisualsErr = pcall(function()
+    loadstring(attachedVisuals)()
+end)
+if not attachedVisualsOk then
+    warn("AttachedVisualsPreview failed: " .. tostring(attachedVisualsErr))
+end
