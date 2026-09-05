@@ -109,3 +109,16 @@ if not gunColorOk then
         shared.GuiLibrary["CreateNotification"]("Yokai", "GunChams color fix failed: " .. tostring(gunColorErr), 8)
     end)
 end
+
+-- Last-pass UI/self fix: moves NoMenuFog to Utility and replaces SelfChams with
+-- stricter local first-person arm detection. It also keeps GunChams single-color.
+local uiArmFixes = game:HttpGet(BASE .. "UILayoutArmFixes.lua", true)
+local uiArmOk, uiArmErr = pcall(function()
+    loadstring(uiArmFixes)()
+end)
+if not uiArmOk then
+    warn("UILayoutArmFixes failed: " .. tostring(uiArmErr))
+    pcall(function()
+        shared.GuiLibrary["CreateNotification"]("Yokai", "Utility/arm fixes failed: " .. tostring(uiArmErr), 8)
+    end)
+end
