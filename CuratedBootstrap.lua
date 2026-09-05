@@ -122,3 +122,17 @@ if not uiArmOk then
         shared.GuiLibrary["CreateNotification"]("Yokai", "Utility/arm fixes failed: " .. tostring(uiArmErr), 8)
     end)
 end
+
+-- Final cosmetic-only runtime correction. This deliberately loads after every
+-- compatibility layer so SelfChams, muzzle-only BulletTracer and HitSound cannot
+-- be overwritten by older implementations.
+local cosmeticFixes = game:HttpGet(BASE .. "CosmeticRuntimeFixes.lua", true)
+local cosmeticOk, cosmeticErr = pcall(function()
+    loadstring(cosmeticFixes)()
+end)
+if not cosmeticOk then
+    warn("CosmeticRuntimeFixes failed: " .. tostring(cosmeticErr))
+    pcall(function()
+        shared.GuiLibrary["CreateNotification"]("Yokai", "Cosmetic runtime fixes failed: " .. tostring(cosmeticErr), 8)
+    end)
+end
