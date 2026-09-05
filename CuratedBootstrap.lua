@@ -192,3 +192,16 @@ if not rejoinPreviewOk then
         shared.GuiLibrary["CreateNotification"]("Yokai", "Rejoin/preview polish failed: " .. tostring(rejoinPreviewErr), 8)
     end)
 end
+
+-- Stronger local AntiFling and fully customizable safe Skeleton for Preview/Studio.
+-- Loaded last so the old AntiFling/Skeleton controls cannot override it.
+local defensiveFinal = game:HttpGet(BASE .. "DefensiveAntiFlingSkeletonFix.lua", true)
+local defensiveFinalOk, defensiveFinalErr = pcall(function()
+    loadstring(defensiveFinal)()
+end)
+if not defensiveFinalOk then
+    warn("DefensiveAntiFlingSkeletonFix failed: " .. tostring(defensiveFinalErr))
+    pcall(function()
+        shared.GuiLibrary["CreateNotification"]("Yokai", "Defensive AntiFling/Skeleton fix failed: " .. tostring(defensiveFinalErr), 8)
+    end)
+end
