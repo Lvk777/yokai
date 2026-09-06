@@ -62,11 +62,12 @@ if Workspace:FindFirstChild("Vehicles") then
     load("VehicleMapPerformanceV1.lua")
 end
 
--- Owner bot/weapon practice profile. Loaded LAST so old Player-targeted visual/combat
--- controls cannot overwrite the NPC-only replacements or fight the FOV/camera.
+-- Owner bot/weapon practice profile. Every final layer is bot-only. V5 is loaded
+-- last because it fixes menu access and integrates directly with this WeaponSystem.
 local isOwnerBotPractice=(Workspace:FindFirstChild("Zombies")~=nil or Workspace:FindFirstChild("WeaponSystem_Workspace")~=nil)
 if isOwnerBotPractice then
     load("OwnerBotPracticeRuntimeV2.lua")
     load("OwnerBotAimVisualUXV3.lua")
     load("OwnerBotVisualPolishV4.lua")
+    load("OwnerBotWeaponAndMenuV5.lua")
 end
