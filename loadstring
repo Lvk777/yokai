@@ -53,23 +53,26 @@ until os.clock() >= deadline
 safeLoad("PreservedLocalExtrasV15.lua")
 
 if weaponSystem then
-    -- Current Testes de Armas e Armaduras / WeaponSystem profile.
-    -- One event-driven runtime owns bot Combat, ESP, Chams and BulletTracer.
+    -- WeaponSystem profile. Combat/weapon integration remains owned by V19.
+    -- Visuals are replaced by V20 so Workspace.Players/Zombies/Characters bot rigs
+    -- are registered event-by-event instead of repeatedly sweeping the whole map.
     safeLoad("WeaponSystemBotRuntimeV19.lua")
     safeLoad("WeaponSystemFeedbackV19.lua")
+    safeLoad("GunTestingBotVisualsV20.lua")
 elseif gunPlugin then
-    -- Older Gun Testing profile kept on the known-good V3 integration.
-    safeLoad("BotArenaAdapter.lua")
+    -- GunPlugin profile. V3 remains the known-good gun integration.
+    -- Do not load the old BotArenaAdapter or AimViewmodelV2 here: both duplicate
+    -- bot scans/work that are already superseded by V3 + the event-driven V20 visuals.
     safeLoad("GunTestingRuntimePolish.lua")
-    safeLoad("GunTestingAimViewmodelV2.lua")
     safeLoad("GunTestingCombatResetV16.lua")
     safeLoad("GunTestingPluginIntegrationV3.lua")
     safeLoad("GunTestingCombatFinalV16.lua")
     safeLoad("QuietBotFeedbackV17.lua")
     safeLoad("LvkReferenceBotAdaptersV18.lua")
+    safeLoad("GunTestingBotVisualsV20.lua")
 else
-    -- Generic NPC fallback: visuals/movement stay available without waiting on a
-    -- game-specific gun API that does not exist.
+    -- Generic NPC fallback keeps the older broad adapter because no game-specific
+    -- gun/container structure was detected.
     safeLoad("BotArenaAdapter.lua")
     safeLoad("QuietBotFeedbackV17.lua")
 end
