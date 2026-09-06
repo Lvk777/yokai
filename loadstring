@@ -27,14 +27,11 @@ for _,key in ipairs(hookKeys) do
 end
 
 load("main.lua")
--- Install the notification filter before the patch stack so repetitive
--- "... loaded" notices never flood the right side of the screen.
 load("NotificationHygieneEarly.lua")
 load("CuratedBootstrap.lua")
 load("DisableUnsafeClientHooks.lua")
 load("DisableLiveSilentAim.lua")
 
--- Restore the executor environment after Yokai's legacy modules have been removed.
 for _,key in ipairs(hookKeys) do
     local value=originalHooks[key]
     pcall(function() env[key]=value end)
@@ -45,7 +42,6 @@ load("UniversalMovementV2.lua")
 load("LocalNoclip.lua")
 load("FinalVisualPolishV4.lua")
 
--- Synthetic target layers are test tools; do not load their extra render loops in normal games.
 if RunService:IsStudio() then
     load("SafeTargetAllInOne.lua")
     load("SafeTargetPolishFinal.lua")
@@ -53,7 +49,6 @@ if RunService:IsStudio() then
     load("SafeTargetVisualsUXV2.lua")
 end
 
--- Gun Testing passive/local profile.
 local lp=Players.LocalPlayer
 local playerScripts=lp and lp:FindFirstChild("PlayerScripts")
 local gunController=playerScripts and playerScripts:FindFirstChild("GunController")
@@ -65,9 +60,6 @@ if isGunTesting then
     load("GunTestingSafeUXV4.lua")
 end
 
--- Some experiences stream/map-build these folders after the player joins. Waiting
--- here prevents the bot profile from being skipped simply because the loader ran
--- a fraction of a second too early.
 local function botProfileReady()
     return Workspace:FindFirstChild("Zombies")~=nil or Workspace:FindFirstChild("WeaponSystem_Workspace")~=nil
 end
@@ -76,30 +68,39 @@ local function vehicleProfileReady()
 end
 if not botProfileReady() and not vehicleProfileReady() then
     local deadline=os.clock()+12
-    repeat
-        task.wait(.15)
-    until botProfileReady() or vehicleProfileReady() or os.clock()>=deadline
+    repeat task.wait(.15) until botProfileReady() or vehicleProfileReady() or os.clock()>=deadline
 end
+
+-- Preserve the user's currently-open main windows before the profile patch stack.
+pcall(function()
+    local gl=shared.GuiLibrary
+    local objs=gl and gl.ObjectsThatCanBeSaved
+    if not objs then return end
+    local state={}
+    for _,name in ipairs({"Combat","Movement","Render","Utility","Visuals","World"}) do
+        local rec=objs[name.."Window"]
+        local obj=rec and rec.Object
+        if obj and typeof(obj)=="Instance" then state[name]=obj.Visible==true end
+    end
+    shared.YokaiPreBotWindowState=state
+end)
 
 if vehicleProfileReady() then
     load("VehicleMapPerformanceV1.lua")
 end
 
--- Owner bot/weapon practice profile. Final layers are intentionally loaded in a
--- deterministic order. V5 integrates with this WeaponSystem; V6 only fixes menu
--- visibility/scroll/subcontrol ordering. V7 restores concise damage/part feedback.
 if botProfileReady() then
     load("OwnerBotPracticeRuntimeV2.lua")
     load("OwnerBotAimVisualUXV3.lua")
     load("OwnerBotVisualPolishV4.lua")
-    local ok=load("OwnerBotWeaponAndMenuV5.lua")
-    if not ok then
-        task.wait(.6)
-        load("OwnerBotWeaponAndMenuV5.lua")
-    end
+    -- Run the integration once only. Retrying a partially failed monolithic patch
+    -- can remove controls twice and is the main source of "loads, then disappears".
+    load("OwnerBotWeaponAndMenuV5.lua")
     load("OwnerBotMenuVisibilityV6.lua")
     load("OwnerBotDamageNotificationsV7.lua")
-    -- Must be the last visual owner: this disables every older Fullbright control
-    -- and writes the final Lighting state after the game's own day/night pass.
     load("FullBrightnessFinalV8.lua")
 end
+
+-- Always load the final passive UI/performance pass. In bot maps it also owns
+-- Tracers + global Distance; elsewhere it only exposes reversible performance tools.
+load("FinalMenuPerformanceV9.lua")
