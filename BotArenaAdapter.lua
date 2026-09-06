@@ -71,18 +71,58 @@ end
 
 -- ============================================================================
 -- Bot discovery: direct Humanoid models only, and NEVER Player characters.
+-- Some games wrap the visible player rig in another Model, so exclusion checks
+-- exact characters, ancestors/descendants and Humanoid display names.
 -- ============================================================================
 local bots={}
 local function rootOf(model)
     return model and (model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("UpperTorso") or model:FindFirstChild("Torso") or model.PrimaryPart)
 end
+local function belongsToPlayer(model,hum)
+    if not model then return false end
+    for _,plr in ipairs(Players:GetPlayers()) do
+        local char=plr.Character
+        if char then
+            if model==char or model:IsDescendantOf(char) or char:IsDescendantOf(model) then return true end
+            local root=rootOf(model)
+            if root and root:IsDescendantOf(char) then return true end
+        end
+        local dn=hum and hum.DisplayName or ""
+        if dn~="" and (dn==plr.Name or dn==plr.DisplayName) then return true end
+        if model.Name==plr.Name or model.Name==plr.DisplayName then return true end
+    end
+    return false
+end
+local function looksGeneratedName(text)
+    text=tostring(text or "")
+    if text=="" then return true end
+    local stripped=text:gsub("[{}%-]","")
+    if #stripped>=24 and stripped:match("^%x+$") then return true end
+    if #text>=28 and text:match("^[%w_%-{}]+$") and text:find("%-",1,true) then return true end
+    return false
+end
+local function readableBotName(model,hum)
+    local display=hum and tostring(hum.DisplayName or "") or ""
+    if display~="" and not looksGeneratedName(display) then return display end
+    for _,attr in ipairs({"DisplayName","BotName","NPCName","CharacterName"}) do
+        local ok,value=pcall(function() return model:GetAttribute(attr) end)
+        if ok and type(value)=="string" and value~="" and not looksGeneratedName(value) then return value end
+    end
+    for _,name in ipairs({"DisplayName","BotName","NPCName","CharacterName"}) do
+        local value=model:FindFirstChild(name)
+        if value and value:IsA("StringValue") and value.Value~="" and not looksGeneratedName(value.Value) then return value.Value end
+    end
+    if not looksGeneratedName(model.Name) then return model.Name end
+    return "Bot"
+end
 local function isBot(model)
-    if not model or not model:IsA("Model") or model==LocalPlayer.Character then return false end
+    if not model or not model:IsA("Model") then return false end
     if model.Name=="YokaiSafeVisualTestTarget" then return false end
-    if Players:GetPlayerFromCharacter(model) then return false end
     local hum=model:FindFirstChildOfClass("Humanoid")
     local root=rootOf(model)
-    return hum~=nil and root~=nil and hum.Health>0
+    if not hum or not root or hum.Health<=0 then return false end
+    if belongsToPlayer(model,hum) then return false end
+    return true
 end
 local function rescanBots()
     local nextSet={}
@@ -95,8 +135,11 @@ rescanBots()
 local scanClock=0
 RunService.Heartbeat:Connect(function(dt)
     scanClock+=dt
-    if scanClock>=1 then scanClock=0 rescanBots() end
+    if scanClock>=0.5 then scanClock=0 rescanBots() end
 end)
+Players.PlayerAdded:Connect(function() task.defer(rescanBots) end)
+Players.PlayerRemoving:Connect(function() task.defer(rescanBots) end)
+LocalPlayer.CharacterAdded:Connect(function() task.delay(.2,rescanBots) end)
 
 local function aimPart(model,partName)
     if not model then return nil end
@@ -458,6 +501,7 @@ RunService:BindToRenderStep("YokaiBotVisuals",Enum.RenderPriority.Last.Value+100
             local stateColor=wallCheck and (occluded and occludedColor or visibleColor) or espColor
             local cleanRed=Color3.new((stateColor.R+.16)/1.16,(stateColor.G+.10)/1.10,(stateColor.B+.10)/1.10)
             local w,h=br.X-tl.X,br.Y-tl.Y
+            local displayName=readableBotName(model,hum)
 
             if espEnabled then
                 s.Fill.Position=UDim2.fromOffset(tl.X,tl.Y) s.Fill.Size=UDim2.fromOffset(w,h)
@@ -470,7 +514,7 @@ RunService:BindToRenderStep("YokaiBotVisuals",Enum.RenderPriority.Last.Value+100
                     s.Health.Position=UDim2.fromOffset(x+1,tl.Y+1+(h-2)*(1-ratio)) s.Health.Size=UDim2.fromOffset(2,(h-2)*ratio) s.HealthGradient.Color=palette(espPalette) s.Health.Visible=true
                     s.HealthText.Position=UDim2.fromOffset(x+8,tl.Y+h*(1-ratio)-8) s.HealthText.Text=tostring(math.floor(hum.Health)) s.HealthText.Visible=espHealthText
                 else s.HealthBack.Visible=false s.Health.Visible=false s.HealthText.Visible=false end
-                if espNames then s.Name.Position=UDim2.fromOffset((tl.X+br.X)/2-90,tl.Y-18) s.Name.Text=model.Name.." ["..math.floor(dist).."]" s.Name.Visible=true else s.Name.Visible=false end
+                if espNames then s.Name.Position=UDim2.fromOffset((tl.X+br.X)/2-90,tl.Y-18) s.Name.Text=displayName.." ["..math.floor(dist).."]" s.Name.Visible=true else s.Name.Visible=false end
             else
                 s.Fill.Visible=false hideLines(s.Corners)
                 if not healthEnabled then s.HealthBack.Visible=false s.Health.Visible=false s.HealthText.Visible=false end
@@ -500,7 +544,7 @@ RunService:BindToRenderStep("YokaiBotVisuals",Enum.RenderPriority.Last.Value+100
                 s.Health.Position=UDim2.fromOffset(x+1,tl.Y+1+(h-2)*(1-ratio)) s.Health.Size=UDim2.fromOffset(2,(h-2)*ratio) s.HealthGradient.Color=palette(healthPalette) s.Health.Visible=true
                 s.HealthText.Position=UDim2.fromOffset(x+8,tl.Y+h*(1-ratio)-8) s.HealthText.Text=tostring(math.floor(hum.Health)) s.HealthText.Visible=healthTextEnabled
             end
-            if namesEnabled and not espEnabled then s.Name.Position=UDim2.fromOffset((tl.X+br.X)/2-90,tl.Y-18) s.Name.Text=model.Name.." ["..math.floor(dist).."]" s.Name.Visible=true end
+            if namesEnabled and not espEnabled then s.Name.Position=UDim2.fromOffset((tl.X+br.X)/2-90,tl.Y-18) s.Name.Text=displayName.." ["..math.floor(dist).."]" s.Name.Visible=true end
             if skeletonEnabled then drawSkeleton(s,model) else hideLines(s.Skeleton) end
             if tracersEnabled then setLine(s.Tracer,tracerStart(),Vector2.new((tl.X+br.X)/2,br.Y),tracerThickness,tracerColor,tracerTransparency) else s.Tracer.Visible=false end
             if box3DEnabled then draw3D(s,model) else hideLines(s.Box3D) end
