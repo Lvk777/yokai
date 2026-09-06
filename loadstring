@@ -1,5 +1,9 @@
 local BASE = "https://raw.githubusercontent.com/Lvk777/yokai/refs/heads/custom/curated-yokai-final/"
 loadstring(game:HttpGet(BASE .. "main.lua", true))()
+
+-- Quiet the bootstrap before the patch stack starts emitting status toasts.
+loadstring(game:HttpGet(BASE .. "NotificationHygieneEarly.lua", true))()
+
 loadstring(game:HttpGet(BASE .. "CuratedBootstrap.lua", true))()
 loadstring(game:HttpGet(BASE .. "SimpleAntiFlingFinal.lua", true))()
 loadstring(game:HttpGet(BASE .. "SafeTargetAllInOne.lua", true))()
@@ -13,13 +17,13 @@ loadstring(game:HttpGet(BASE .. "BotArenaAdapter.lua", true))()
 loadstring(game:HttpGet(BASE .. "GunTestingRuntimePolish.lua", true))()
 loadstring(game:HttpGet(BASE .. "GunTestingAimViewmodelV2.lua", true))()
 
--- Preserved extras, now event-driven/throttled for lower UI/runtime overhead.
+-- Preserved extras, event-driven/throttled for lower UI/runtime overhead.
 loadstring(game:HttpGet(BASE .. "PreservedLocalExtrasV15.lua", true))()
 
--- Clear legacy Combat rows first, then let the known-good V3 recreate its
--- bot-practice Aimbot/SilentAim/Magic Bullets and viewmodel integration.
+-- Rebuild the requested bot-practice Combat on top of the known-good V3 baseline.
 loadstring(game:HttpGet(BASE .. "GunTestingCombatResetV16.lua", true))()
 loadstring(game:HttpGet(BASE .. "GunTestingPluginIntegrationV3.lua", true))()
-
--- Complete and pin the new Combat panel with the remaining requested modules.
 loadstring(game:HttpGet(BASE .. "GunTestingCombatFinalV16.lua", true))()
+
+-- Last layer owns only useful feedback: bot damage popup, hitmarker and bot inventory.
+loadstring(game:HttpGet(BASE .. "QuietBotFeedbackV17.lua", true))()
