@@ -1,29 +1,30 @@
--- GunTesting Lite standalone loader V4
--- Clean startup, map-wide replicated-bot ESP, polished UI and local freecam.
+-- GunTesting Lite standalone loader V5
+-- Clean startup + polished UI + World extras + local freecam + unified practice Combat/Visuals.
 
-if shared.GunTestingLiteStandaloneV4 == "loaded" then
-    local CoreGui = game:GetService("CoreGui")
-    local parent = (gethui and gethui()) or CoreGui
-    local gui = parent:FindFirstChild("GunTestingLiteV1", true)
+if shared.GunTestingLiteStandaloneV5 == "loaded" then
+    local CoreGui=game:GetService("CoreGui")
+    local parent=(gethui and gethui()) or CoreGui
+    local gui=parent:FindFirstChild("GunTestingLiteV1",true)
     if gui then
         local title
-        for _, d in ipairs(gui:GetDescendants()) do
-            if d:IsA("TextLabel") and tostring(d.Text):find("GUN TESTING LITE", 1, true) then title=d; break end
+        for _,d in ipairs(gui:GetDescendants()) do
+            if d:IsA("TextLabel") and tostring(d.Text):find("GUN TESTING LITE",1,true) then title=d; break end
         end
         local main=title and title.Parent and title.Parent.Parent
         if main and main:IsA("Frame") then main.Visible=not main.Visible end
     end
     return
 end
-if shared.GunTestingLiteStandaloneV4 == "loading" then return end
-shared.GunTestingLiteStandaloneV4 = "loading"
+if shared.GunTestingLiteStandaloneV5 == "loading" then return end
+shared.GunTestingLiteStandaloneV5="loading"
 
 local BASE="https://raw.githubusercontent.com/Lvk777/yokai/refs/heads/custom/curated-yokai-final/Standalone/"
 local CoreGui=game:GetService("CoreGui")
 local parent=(gethui and gethui()) or CoreGui
 
 for _,name in ipairs({
-    "GunTestingLiteV1","GunTestingLiteOverlay","GunTestingLiteSnaplinesV2","GunTestingLiteMapESPV4"
+    "GunTestingLiteV1","GunTestingLiteOverlay","GunTestingLiteSnaplinesV2",
+    "GunTestingLiteMapESPV4","GunTestingLitePracticeV5"
 }) do
     local old=parent:FindFirstChild(name,true)
     if old then pcall(function() old:Destroy() end) end
@@ -34,6 +35,7 @@ shared.GunTestingLiteExtrasV2=nil
 shared.GunTestingLiteUIPolishV3=nil
 shared.GunTestingLiteMapESPV4=nil
 shared.GunTestingLiteMovementV4=nil
+shared.GunTestingLitePracticeV5=nil
 
 local function runFile(name,transform)
     local ok,err=pcall(function()
@@ -50,22 +52,23 @@ end
 local baseOk=runFile("GunTestingLiteV1.lua",function(src)
     -- Fix the original UI early-stop bug.
     src=src:gsub("tabs%.Combat:Activate%(%)","")
-    -- V3 polish owns RightShift so it is handled once.
+    -- UI V3 owns RightShift.
     src=src:gsub(
         "if i%.KeyCode==Enum%.KeyCode%.RightShift then Main%.Visible=not Main%.Visible end",
         "-- RightShift handled by GunTestingLiteUIPolishV3"
     )
-    -- Do not expose the old avatar-physics Fly controls; Movement V4 supplies local freecam.
-    -- The old Fly state remains false by default, so no character force is applied.
+    -- Keep old physics Fly off; Movement V4 supplies local freecam instead.
     src=src:gsub('print%(%"%[GunTestingLite%] loaded%"%)',"")
     return src
 end)
+if not baseOk then shared.GunTestingLiteStandaloneV5=nil; return end
 
-if not baseOk then shared.GunTestingLiteStandaloneV4=nil; return end
-
+-- World controls from V2 are kept because they already work.
 runFile("GunTestingLiteExtrasV2.lua")
 runFile("GunTestingLiteUIPolishV3.lua")
-runFile("GunTestingLiteMapESPV4.lua")
+-- V5 replaces both the old V1 Combat target logic and the V4 ESP target logic.
+runFile("GunTestingLitePracticeV5.lua")
+-- Local-only freecam movement; does not move the character.
 runFile("GunTestingLiteMovementV4.lua")
 
-shared.GunTestingLiteStandaloneV4="loaded"
+shared.GunTestingLiteStandaloneV5="loaded"
