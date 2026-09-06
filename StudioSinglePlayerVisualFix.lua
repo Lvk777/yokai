@@ -1,8 +1,8 @@
--- Studio-only fallback visual target for single-player Baseplate tests.
--- Does nothing outside Roblox Studio.
-local RunService = game:GetService("RunService")
-if not RunService:IsStudio() then return end
+-- Safe single-player visual test target.
+-- This file never renders other real players. It only creates a local synthetic target
+-- when there are no other players, so ESP/health/skeleton/wallcheck UI can be tested.
 
+local RunService = game:GetService("RunService")
 repeat task.wait() until shared.YokaiFullyLoaded and shared.GuiLibrary
 
 local GuiLibrary = shared.GuiLibrary
@@ -39,7 +39,6 @@ local function enabled(name)
     return rec and rec.Api and rec.Api.Enabled==true
 end
 
--- Remove an older fallback target/overlay from a previous execution.
 local old=Workspace:FindFirstChild("YokaiStudioTestTarget")
 if old then old:Destroy() end
 for _,root in ipairs({LocalPlayer:FindFirstChildOfClass("PlayerGui"),CoreGui}) do
@@ -79,12 +78,24 @@ end
 
 local target
 local hum
+local function testBaseCFrame()
+    local cam=Workspace.CurrentCamera
+    if cam then
+        local look=cam.CFrame.LookVector
+        local flat=Vector3.new(look.X,0,look.Z)
+        if flat.Magnitude<0.01 then flat=Vector3.new(0,0,-1) else flat=flat.Unit end
+        local pos=cam.CFrame.Position + flat*18 - Vector3.new(0,2.5,0)
+        return CFrame.lookAt(pos,pos-flat)
+    end
+    local char=LocalPlayer.Character
+    local root=char and char:FindFirstChild("HumanoidRootPart")
+    return root and (root.CFrame*CFrame.new(0,0,-18)) or CFrame.new(0,4,-18)
+end
+
 local function createTarget()
     if target and target.Parent then return target end
     if otherPlayerCount()>0 then return nil end
-    local char=LocalPlayer.Character
-    local root=char and char:FindFirstChild("HumanoidRootPart")
-    local base=root and (root.CFrame*CFrame.new(7,0,-20)) or CFrame.new(0,4,-20)
+    local base=testBaseCFrame()
 
     target=Instance.new("Model")
     target.Name="YokaiStudioTestTarget"
@@ -154,8 +165,9 @@ name.Size=UDim2.fromOffset(220,18)
 name.Font=Enum.Font.Code
 name.TextSize=12
 name.TextStrokeTransparency=0
+name.TextStrokeColor3=Color3.new(0,0,0)
 name.TextColor3=Color3.new(1,1,1)
-name.Text="StudioTestTarget"
+name.Text="VisualTestTarget"
 name.Visible=false
 name.Parent=overlay
 local distance=name:Clone() distance.TextSize=11 distance.Parent=overlay
@@ -190,7 +202,7 @@ local function bounds(model)
         local p=cam:WorldToViewportPoint(wp)
         if p.Z>0 then any=true minX=math.min(minX,p.X) minY=math.min(minY,p.Y) maxX=math.max(maxX,p.X) maxY=math.max(maxY,p.Y) end
     end end end
-    if not any then return nil end
+    if not any or maxX<0 or maxY<0 or minX>cam.ViewportSize.X or minY>cam.ViewportSize.Y then return nil end
     return Vector2.new(minX,minY),Vector2.new(maxX,maxY)
 end
 
@@ -236,6 +248,7 @@ local function hideAll()
     hideLines(corners) hideLines(skeleton)
 end
 
+local offscreenSince=0
 RunService.RenderStepped:Connect(function()
     if otherPlayerCount()>0 then
         if target then target:Destroy() target=nil hum=nil end
@@ -248,7 +261,16 @@ RunService.RenderStepped:Connect(function()
     local head=model:FindFirstChild("Head")
     local torso=model:FindFirstChild("Torso")
     local tl,br=bounds(model)
-    if not root or not tl then hideAll() return end
+    if not root or not tl then
+        hideAll()
+        if os.clock()-offscreenSince>0.4 then
+            offscreenSince=os.clock()
+            local base=testBaseCFrame()
+            if target and target.PrimaryPart then target:PivotTo(base*CFrame.new(0,-1.5,0)) end
+        end
+        return
+    end
+    offscreenSince=os.clock()
 
     local espOn=enabled("ESP")
     local healthOn=enabled("HealthBar") or espOn
@@ -256,6 +278,7 @@ RunService.RenderStepped:Connect(function()
     local cornerOn=enabled("Corner Box") or espOn
     local tracerOn=enabled("Tracers")
     local sk=shared.YokaiStudioSkeletonState or {Enabled=enabled("Skeleton"),Color=Color3.new(1,1,1),Transparency=0,Thickness=1}
+    if sk.Enabled==nil then sk.Enabled=enabled("Skeleton") end
     local state=shared.YokaiVisualPreviewState or {}
     local col=state.DefaultColor or Color3.fromRGB(119,120,255)
     if espOn and state.WallCheck then col=visible(model,head or root) and (state.VisibleColor or Color3.fromRGB(35,235,95)) or (state.OccludedColor or Color3.fromRGB(245,55,55)) end
