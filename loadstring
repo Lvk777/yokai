@@ -4,8 +4,14 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local function load(name)
-    local ok,err=pcall(function() loadstring(game:HttpGet(BASE .. name, true))() end)
+    local ok,err=pcall(function()
+        local src=game:HttpGet(BASE .. name, true)
+        local fn,compileErr=loadstring(src)
+        if not fn then error(compileErr or ("compile failed: "..name)) end
+        fn()
+    end)
     if not ok then warn("[Yokai loader] "..name.." failed: "..tostring(err)) end
+    return ok,err
 end
 
 -- Compatibility loading mode: temporarily hide executor hook APIs while the base
@@ -56,18 +62,37 @@ if isGunTesting then
     load("GunTestingSafeUXV4.lua")
 end
 
--- Vehicle profile keeps only the reversible FPS Boost; the final bot runtime
--- recreates Car ESP so there is a single vehicle renderer.
-if Workspace:FindFirstChild("Vehicles") then
+-- Some experiences stream/map-build these folders after the player joins. Waiting
+-- here prevents the bot profile from being skipped simply because the loader ran
+-- a fraction of a second too early.
+local function botProfileReady()
+    return Workspace:FindFirstChild("Zombies")~=nil or Workspace:FindFirstChild("WeaponSystem_Workspace")~=nil
+end
+local function vehicleProfileReady()
+    return Workspace:FindFirstChild("Vehicles")~=nil
+end
+if not botProfileReady() and not vehicleProfileReady() then
+    local deadline=os.clock()+12
+    repeat
+        task.wait(.15)
+    until botProfileReady() or vehicleProfileReady() or os.clock()>=deadline
+end
+
+if vehicleProfileReady() then
     load("VehicleMapPerformanceV1.lua")
 end
 
--- Owner bot/weapon practice profile. Every final layer is bot-only. V5 is loaded
--- last because it fixes menu access and integrates directly with this WeaponSystem.
-local isOwnerBotPractice=(Workspace:FindFirstChild("Zombies")~=nil or Workspace:FindFirstChild("WeaponSystem_Workspace")~=nil)
-if isOwnerBotPractice then
+-- Owner bot/weapon practice profile. Final layers are intentionally loaded in a
+-- deterministic order. V5 integrates with this WeaponSystem; V6 only fixes menu
+-- visibility/scroll/subcontrol ordering.
+if botProfileReady() then
     load("OwnerBotPracticeRuntimeV2.lua")
     load("OwnerBotAimVisualUXV3.lua")
     load("OwnerBotVisualPolishV4.lua")
-    load("OwnerBotWeaponAndMenuV5.lua")
+    local ok=load("OwnerBotWeaponAndMenuV5.lua")
+    if not ok then
+        task.wait(.6)
+        load("OwnerBotWeaponAndMenuV5.lua")
+    end
+    load("OwnerBotMenuVisibilityV6.lua")
 end
