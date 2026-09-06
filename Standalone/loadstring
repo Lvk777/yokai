@@ -1,8 +1,8 @@
--- GunTesting Lite standalone loader V6
+-- GunTesting Lite standalone loader V7
 -- Confirmed GunTesting structure: Workspace > Players > botName > Humanoid / HumanoidRootPart.
--- Loads one direct bot Combat/Visual runtime, persistent World controls, polished UI and local hover freecam.
+-- Adds self-only ESP renderer diagnostics and a non-player bot probe to isolate detection vs rendering issues.
 
-if shared.GunTestingLiteStandaloneV6 == "loaded" then
+if shared.GunTestingLiteStandaloneV7 == "loaded" then
     local CoreGui=game:GetService("CoreGui")
     local parent=(gethui and gethui()) or CoreGui
     local gui=parent:FindFirstChild("GunTestingLiteV1",true)
@@ -16,24 +16,24 @@ if shared.GunTestingLiteStandaloneV6 == "loaded" then
     end
     return
 end
-if shared.GunTestingLiteStandaloneV6 == "loading" then return end
-shared.GunTestingLiteStandaloneV6="loading"
+if shared.GunTestingLiteStandaloneV7 == "loading" then return end
+shared.GunTestingLiteStandaloneV7="loading"
 
 local BASE="https://raw.githubusercontent.com/Lvk777/yokai/refs/heads/custom/curated-yokai-final/Standalone/"
 local CoreGui=game:GetService("CoreGui")
 local parent=(gethui and gethui()) or CoreGui
 
--- Remove visual objects from older standalone revisions.
 for _,name in ipairs({
     "GunTestingLiteV1","GunTestingLiteOverlay","GunTestingLiteSnaplinesV2",
-    "GunTestingLiteMapESPV4","GunTestingLitePracticeV5","GunTestingLiteDirectBotsV6"
+    "GunTestingLiteMapESPV4","GunTestingLitePracticeV5","GunTestingLiteDirectBotsV6",
+    "GunTestingLiteSelfESPTest","GunTestingLiteSelfESPLabel","GunTestingLiteBotProbe","GunTestingLiteBotProbeLabel"
 }) do
     local old=parent:FindFirstChild(name,true)
     if old then pcall(function() old:Destroy() end) end
 end
 
--- Stop recovery loops from older revisions and allow clean module initialization.
 shared.GunTestingLiteStandaloneV5=nil
+shared.GunTestingLiteStandaloneV6=nil
 shared.GunTestingLiteV1=nil
 shared.GunTestingLiteExtrasV2=nil
 shared.GunTestingLiteUIPolishV3=nil
@@ -42,6 +42,7 @@ shared.GunTestingLiteMovementV4=nil
 shared.GunTestingLitePracticeV5=nil
 shared.GunTestingLiteWorldStabilizerV3=nil
 shared.GunTestingLiteDirectBotsV6=nil
+shared.GunTestingLiteESPDiagnosticsV7=nil
 
 local function runFile(name,transform)
     local ok,err=pcall(function()
@@ -56,9 +57,7 @@ local function runFile(name,transform)
 end
 
 local baseOk=runFile("GunTestingLiteV1.lua",function(src)
-    -- Fix the original GUI early-stop bug.
     src=src:gsub("tabs%.Combat:Activate%(%)","")
-    -- UI polish owns the menu hotkey once.
     src=src:gsub(
         "if i%.KeyCode==Enum%.KeyCode%.RightShift then Main%.Visible=not Main%.Visible end",
         "-- RightShift handled by GunTestingLiteUIPolishV3"
@@ -66,12 +65,12 @@ local baseOk=runFile("GunTestingLiteV1.lua",function(src)
     src=src:gsub('print%(%"%[GunTestingLite%] loaded%"%)',"")
     return src
 end)
-if not baseOk then shared.GunTestingLiteStandaloneV6=nil; return end
+if not baseOk then shared.GunTestingLiteStandaloneV7=nil; return end
 
--- No ExtrasV2 / MapESPV4 / PracticeV5 here: V6 owns Combat, ESP, Snapline and Car ESP directly.
 runFile("GunTestingLiteWorldStabilizerV3.lua")
 runFile("GunTestingLiteUIPolishV3.lua")
 runFile("GunTestingLiteDirectBotsV6.lua")
+runFile("GunTestingLiteESPDiagnosticsV7.lua")
 runFile("GunTestingLiteMovementV4.lua")
 
-shared.GunTestingLiteStandaloneV6="loaded"
+shared.GunTestingLiteStandaloneV7="loaded"
