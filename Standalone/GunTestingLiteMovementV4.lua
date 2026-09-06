@@ -21,7 +21,7 @@ end
 local Movement=findPage("Movement")
 if not Movement then return end
 
--- Hide the old physics Fly rows; WalkSpeed and Car Fly remain unchanged.
+-- Hide the old character-physics Fly rows. WalkSpeed and Car Fly stay separate.
 for _,child in ipairs(Movement:GetChildren()) do
     if child:IsA("Frame") then
         local label=child:FindFirstChildOfClass("TextLabel")
@@ -32,6 +32,13 @@ end
 local accent=Color3.fromRGB(125,82,235)
 local enabled=false
 local speed=85
+local looking=false
+local yaw=0
+local pitch=0
+local sensitivity=.0025
+local oldType=nil
+local oldSubject=nil
+local oldMouseBehavior=nil
 local order=12000
 
 local function row(label)
@@ -41,19 +48,21 @@ local function row(label)
     return f
 end
 
-local oldType=nil
-local oldSubject=nil
 local function stopFreecam()
     local cam=Workspace.CurrentCamera
-    if not cam then return end
-    if oldType then cam.CameraType=oldType end
-    if oldSubject then pcall(function() cam.CameraSubject=oldSubject end) end
-    oldType=nil; oldSubject=nil
+    looking=false
+    if oldMouseBehavior~=nil then pcall(function() UIS.MouseBehavior=oldMouseBehavior end) end
+    if cam then
+        if oldType then cam.CameraType=oldType end
+        if oldSubject then pcall(function() cam.CameraSubject=oldSubject end) end
+    end
+    oldType=nil; oldSubject=nil; oldMouseBehavior=nil
 end
 local function startFreecam()
     local cam=Workspace.CurrentCamera
     if not cam then return end
-    if not oldType then oldType=cam.CameraType; oldSubject=cam.CameraSubject end
+    if not oldType then oldType=cam.CameraType; oldSubject=cam.CameraSubject; oldMouseBehavior=UIS.MouseBehavior end
+    local x,y=cam.CFrame:ToOrientation(); pitch=x; yaw=y
     cam.CameraType=Enum.CameraType.Scriptable
 end
 
@@ -72,10 +81,36 @@ local box=Instance.new("TextBox"); box.Size=UDim2.fromOffset(78,24); box.Positio
 local bc=Instance.new("UICorner"); bc.CornerRadius=UDim.new(0,5); bc.Parent=box
 box.FocusLost:Connect(function() local n=tonumber(box.Text); if n then speed=math.clamp(n,10,500) end; box.Text=tostring(speed) end)
 
+local hint=row("Freecam controls: WASD + E/Q • hold RMB to look")
+hint.BackgroundTransparency=.35
+
+UIS.InputBegan:Connect(function(input,processed)
+    if not enabled or processed then return end
+    if input.UserInputType==Enum.UserInputType.MouseButton2 then
+        looking=true
+        pcall(function() UIS.MouseBehavior=Enum.MouseBehavior.LockCurrentPosition end)
+    end
+end)
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType==Enum.UserInputType.MouseButton2 then
+        looking=false
+        if oldMouseBehavior~=nil then pcall(function() UIS.MouseBehavior=oldMouseBehavior end) end
+    end
+end)
+
 RunService.RenderStepped:Connect(function(dt)
     if not enabled then return end
     local cam=Workspace.CurrentCamera; if not cam then return end
     if cam.CameraType~=Enum.CameraType.Scriptable then cam.CameraType=Enum.CameraType.Scriptable end
+
+    if looking then
+        local delta=UIS:GetMouseDelta()
+        yaw-=delta.X*sensitivity
+        pitch=math.clamp(pitch-delta.Y*sensitivity,-math.rad(89),math.rad(89))
+    end
+
+    local pos=cam.CFrame.Position
+    local rot=CFrame.fromOrientation(pitch,yaw,0)
     local move=Vector3.zero
     if UIS:IsKeyDown(Enum.KeyCode.W) then move+=Vector3.new(0,0,-1) end
     if UIS:IsKeyDown(Enum.KeyCode.S) then move+=Vector3.new(0,0,1) end
@@ -83,5 +118,6 @@ RunService.RenderStepped:Connect(function(dt)
     if UIS:IsKeyDown(Enum.KeyCode.D) then move+=Vector3.new(1,0,0) end
     if UIS:IsKeyDown(Enum.KeyCode.E) then move+=Vector3.new(0,1,0) end
     if UIS:IsKeyDown(Enum.KeyCode.Q) then move+=Vector3.new(0,-1,0) end
-    if move.Magnitude>0 then cam.CFrame=cam.CFrame*CFrame.new(move.Unit*speed*dt) end
+    if move.Magnitude>0 then pos+=(rot:VectorToWorldSpace(move.Unit))*speed*dt end
+    cam.CFrame=CFrame.new(pos)*rot
 end)
