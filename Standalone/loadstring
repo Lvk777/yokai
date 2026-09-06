@@ -1,7 +1,7 @@
--- GunTesting Lite standalone loader V9
--- Combat remains in V6; bot visuals are rebuilt in V9 for direct Workspace.Players rigs.
+-- GunTesting Lite standalone loader V10
+-- Combat in V6, bot visuals in V9, plus self-only renderer diagnostics V10.
 
-if shared.GunTestingLiteStandaloneV9 == "loaded" then
+if shared.GunTestingLiteStandaloneV10 == "loaded" then
     local CoreGui=game:GetService("CoreGui")
     local parent=(gethui and gethui()) or CoreGui
     local gui=parent:FindFirstChild("GunTestingLiteV1",true)
@@ -15,8 +15,8 @@ if shared.GunTestingLiteStandaloneV9 == "loaded" then
     end
     return
 end
-if shared.GunTestingLiteStandaloneV9 == "loading" then return end
-shared.GunTestingLiteStandaloneV9="loading"
+if shared.GunTestingLiteStandaloneV10 == "loading" then return end
+shared.GunTestingLiteStandaloneV10="loading"
 
 local BASE="https://raw.githubusercontent.com/Lvk777/yokai/refs/heads/custom/curated-yokai-final/Standalone/"
 local CoreGui=game:GetService("CoreGui")
@@ -25,8 +25,8 @@ local parent=(gethui and gethui()) or CoreGui
 for _,name in ipairs({
     "GunTestingLiteV1","GunTestingLiteOverlay","GunTestingLiteSnaplinesV2",
     "GunTestingLiteMapESPV4","GunTestingLitePracticeV5","GunTestingLiteDirectBotsV6",
-    "GunTestingLiteDirectVisualsV9","GunTestingLiteSelfESPTest","GunTestingLiteSelfESPLabel",
-    "GunTestingLiteBotProbe","GunTestingLiteBotProbeLabel"
+    "GunTestingLiteDirectVisualsV9","GunTestingLiteRendererProbeV10",
+    "GunTestingLiteSelfESPTest","GunTestingLiteSelfESPLabel","GunTestingLiteBotProbe","GunTestingLiteBotProbeLabel"
 }) do
     local old=parent:FindFirstChild(name,true)
     if old then pcall(function() old:Destroy() end) end
@@ -36,6 +36,7 @@ shared.GunTestingLiteStandaloneV5=nil
 shared.GunTestingLiteStandaloneV6=nil
 shared.GunTestingLiteStandaloneV7=nil
 shared.GunTestingLiteStandaloneV8=nil
+shared.GunTestingLiteStandaloneV9=nil
 shared.GunTestingLiteV1=nil
 shared.GunTestingLiteExtrasV2=nil
 shared.GunTestingLiteUIPolishV3=nil
@@ -46,6 +47,7 @@ shared.GunTestingLiteWorldStabilizerV3=nil
 shared.GunTestingLiteDirectBotsV6=nil
 shared.GunTestingLiteESPDiagnosticsV7=nil
 shared.GunTestingLiteDirectVisualsV9=nil
+shared.GunTestingLiteRendererProbeV10=nil
 
 local function runFile(name,transform)
     local ok,err=pcall(function()
@@ -68,14 +70,13 @@ local baseOk=runFile("GunTestingLiteV1.lua",function(src)
     src=src:gsub('print%(%"%[GunTestingLite%] loaded%"%)',"")
     return src
 end)
-if not baseOk then shared.GunTestingLiteStandaloneV9=nil; return end
+if not baseOk then shared.GunTestingLiteStandaloneV10=nil; return end
 
 runFile("GunTestingLiteWorldStabilizerV3.lua")
 runFile("GunTestingLiteUIPolishV3.lua")
--- V6 keeps Combat and the previously working Car ESP.
 runFile("GunTestingLiteDirectBotsV6.lua")
--- V9 takes over bot Chams/Box/Corner/Name/Distance/Health/Lines with no distance gate.
 runFile("GunTestingLiteDirectVisualsV9.lua")
+runFile("GunTestingLiteRendererProbeV10.lua")
 runFile("GunTestingLiteMovementV4.lua")
 
-shared.GunTestingLiteStandaloneV9="loaded"
+shared.GunTestingLiteStandaloneV10="loaded"
