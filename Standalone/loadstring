@@ -1,0 +1,1 @@
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Lvk777/yokai/refs/heads/custom/curated-yokai-final/Standalone/GunTestingLiteV1.lua", true))()
