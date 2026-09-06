@@ -13,8 +13,13 @@ loadstring(game:HttpGet(BASE .. "BotArenaAdapter.lua", true))()
 loadstring(game:HttpGet(BASE .. "GunTestingRuntimePolish.lua", true))()
 loadstring(game:HttpGet(BASE .. "GunTestingAimViewmodelV2.lua", true))()
 
--- Keep only the local extras requested after returning to the old Gun Testing stack.
--- Loaded before V3 so GunTestingPluginIntegrationV3 remains the final integration layer.
+-- Preserved extras, now event-driven/throttled for lower UI/runtime overhead.
 loadstring(game:HttpGet(BASE .. "PreservedLocalExtrasV15.lua", true))()
 
+-- Clear legacy Combat rows first, then let the known-good V3 recreate its
+-- bot-practice Aimbot/SilentAim/Magic Bullets and viewmodel integration.
+loadstring(game:HttpGet(BASE .. "GunTestingCombatResetV16.lua", true))()
 loadstring(game:HttpGet(BASE .. "GunTestingPluginIntegrationV3.lua", true))()
+
+-- Complete and pin the new Combat panel with the remaining requested modules.
+loadstring(game:HttpGet(BASE .. "GunTestingCombatFinalV16.lua", true))()
