@@ -1,3 +1,74 @@
+-- GunTesting Lite standalone loader V3
+-- Recovers cleanly from the old partial-init bug and avoids duplicate stacks.
+
+if shared.GunTestingLiteStandaloneV3 == "loaded" then
+    local CoreGui = game:GetService("CoreGui")
+    local parent = (gethui and gethui()) or CoreGui
+    local gui = parent:FindFirstChild("GunTestingLiteV1", true)
+    if gui then
+        local title
+        for _, d in ipairs(gui:GetDescendants()) do
+            if d:IsA("TextLabel") and tostring(d.Text):find("GUN TESTING LITE", 1, true) then
+                title = d
+                break
+            end
+        end
+        local main = title and title.Parent and title.Parent.Parent
+        if main and main:IsA("Frame") then main.Visible = not main.Visible end
+    end
+    return
+end
+if shared.GunTestingLiteStandaloneV3 == "loading" then return end
+shared.GunTestingLiteStandaloneV3 = "loading"
+
 local BASE = "https://raw.githubusercontent.com/Lvk777/yokai/refs/heads/custom/curated-yokai-final/Standalone/"
-loadstring(game:HttpGet(BASE .. "GunTestingLiteV1.lua", true))()
-loadstring(game:HttpGet(BASE .. "GunTestingLiteExtrasV2.lua", true))()
+local CoreGui = game:GetService("CoreGui")
+local parent = (gethui and gethui()) or CoreGui
+
+-- Remove only stale standalone UI from a previous failed/partial execution.
+for _, name in ipairs({"GunTestingLiteV1", "GunTestingLiteOverlay", "GunTestingLiteSnaplinesV2"}) do
+    local old = parent:FindFirstChild(name, true)
+    if old then pcall(function() old:Destroy() end) end
+end
+
+shared.GunTestingLiteV1 = nil
+shared.GunTestingLiteExtrasV2 = nil
+shared.GunTestingLiteUIPolishV3 = nil
+
+local function runFile(name, transform)
+    local ok, err = pcall(function()
+        local src = game:HttpGet(BASE .. name, true)
+        if transform then src = transform(src) end
+        local fn, compileErr = loadstring(src)
+        if not fn then error(compileErr or ("compile failed: " .. name)) end
+        fn()
+    end)
+    if not ok then
+        warn("[GunTestingLite] " .. name .. " failed: " .. tostring(err))
+    end
+    return ok
+end
+
+local baseOk = runFile("GunTestingLiteV1.lua", function(src)
+    -- V1 previously stopped here because GuiButton has no :Activate() method.
+    src = src:gsub("tabs%.Combat:Activate%(%)", "")
+
+    -- UI V3 owns the menu hotkey so RightShift is not handled twice.
+    src = src:gsub(
+        "if i%.KeyCode==Enum%.KeyCode%.RightShift then Main%.Visible=not Main%.Visible end",
+        "-- RightShift handled by GunTestingLiteUIPolishV3"
+    )
+
+    -- Keep F9 quiet for successful startup.
+    src = src:gsub('print%(%"%[GunTestingLite%] loaded%"%)', "")
+    return src
+end)
+
+if not baseOk then
+    shared.GunTestingLiteStandaloneV3 = nil
+    return
+end
+
+runFile("GunTestingLiteExtrasV2.lua")
+runFile("GunTestingLiteUIPolishV3.lua")
+shared.GunTestingLiteStandaloneV3 = "loaded"
