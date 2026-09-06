@@ -1,3 +1,10 @@
+-- Hard session guard: main.lua already protects itself, but without this guard every
+-- later patch could still be executed again if the loader was run twice in one Roblox session.
+if shared.YokaiCuratedStackV18 then
+    return
+end
+shared.YokaiCuratedStackV18="loading"
+
 local BASE = "https://raw.githubusercontent.com/Lvk777/yokai/refs/heads/custom/curated-yokai-final/"
 loadstring(game:HttpGet(BASE .. "main.lua", true))()
 
@@ -25,5 +32,11 @@ loadstring(game:HttpGet(BASE .. "GunTestingCombatResetV16.lua", true))()
 loadstring(game:HttpGet(BASE .. "GunTestingPluginIntegrationV3.lua", true))()
 loadstring(game:HttpGet(BASE .. "GunTestingCombatFinalV16.lua", true))()
 
--- Last layer owns only useful feedback: bot damage popup, hitmarker and bot inventory.
+-- Useful gameplay feedback only: bot damage, hitmarker and bot inventory support.
 loadstring(game:HttpGet(BASE .. "QuietBotFeedbackV17.lua", true))()
+
+-- Final adapter replaces only Aimbot, Fly and Inventory Viewer with the lightweight
+-- versions adapted from the user-provided LvkHub reference.
+loadstring(game:HttpGet(BASE .. "LvkReferenceBotAdaptersV18.lua", true))()
+
+shared.YokaiCuratedStackV18="loaded"
