@@ -56,13 +56,15 @@ if isGunTesting then
     load("GunTestingSafeUXV4.lua")
 end
 
--- Owner's bot/weapon practice experience: executor-only NPC training profile.
-local isOwnerBotPractice=(Workspace:FindFirstChild("Zombies")~=nil or Workspace:FindFirstChild("WeaponSystem_Workspace")~=nil)
-if isOwnerBotPractice then
-    load("OwnerBotExecutorProfileV1.lua")
-end
-
--- Vehicle-heavy maps get an event-driven Car ESP and reversible FPS Boost.
+-- Vehicle profile keeps only the reversible FPS Boost; the final bot runtime
+-- recreates Car ESP so there is a single vehicle renderer.
 if Workspace:FindFirstChild("Vehicles") then
     load("VehicleMapPerformanceV1.lua")
+end
+
+-- Owner bot/weapon practice profile. Loaded LAST so old Player-targeted visual/combat
+-- controls cannot overwrite the NPC-only replacements or fight the FOV/camera.
+local isOwnerBotPractice=(Workspace:FindFirstChild("Zombies")~=nil or Workspace:FindFirstChild("WeaponSystem_Workspace")~=nil)
+if isOwnerBotPractice then
+    load("OwnerBotPracticeRuntimeV2.lua")
 end
