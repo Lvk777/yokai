@@ -10,6 +10,7 @@ end
 
 load("main.lua")
 load("CuratedBootstrap.lua")
+load("DisableLiveSilentAim.lua")
 load("SimpleAntiFlingFinal.lua")
 load("UniversalMovementV2.lua")
 load("LocalNoclip.lua")
