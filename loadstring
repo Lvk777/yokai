@@ -23,7 +23,7 @@ if RunService:IsStudio() then
     load("SafeTargetVisualsUXV2.lua")
 end
 
--- Gun Testing passive/local profile only. Heavy aim/shoot overrides are intentionally not loaded.
+-- Gun Testing passive/local profile.
 local lp=Players.LocalPlayer
 local playerScripts=lp and lp:FindFirstChild("PlayerScripts")
 local gunController=playerScripts and playerScripts:FindFirstChild("GunController")
@@ -33,6 +33,13 @@ local isGunTesting=(lp and lp:FindFirstChild("GunInventory")~=nil and gunPlugin~
 if isGunTesting then
     load("GunTestingRuntimePolish.lua")
     load("GunTestingSafeUXV4.lua")
+end
+
+-- Owner's bot/weapon practice experience: executor-only NPC training profile.
+-- Triggered by structures shown in the owner's Explorer screenshots.
+local isOwnerBotPractice=(Workspace:FindFirstChild("Zombies")~=nil or Workspace:FindFirstChild("WeaponSystem_Workspace")~=nil)
+if isOwnerBotPractice then
+    load("OwnerBotExecutorProfileV1.lua")
 end
 
 -- Vehicle-heavy maps get an event-driven Car ESP and reversible FPS Boost.
