@@ -8,9 +8,29 @@ local function load(name)
     if not ok then warn("[Yokai loader] "..name.." failed: "..tostring(err)) end
 end
 
+-- Compatibility loading mode: temporarily hide executor hook APIs while the base
+-- GUI/module pack is being created. This prevents saved legacy modules such as
+-- ClientKickDisable/SilentAim from installing __namecall hooks during startup.
+local env = (getgenv and getgenv()) or _G
+local hookKeys = {"hookmetamethod","getnamecallmethod","getrawmetatable","setreadonly","make_writeable","hookfunction"}
+local originalHooks = {}
+for _,key in ipairs(hookKeys) do
+    local ok,value=pcall(function() return env[key] end)
+    if ok and value~=nil then originalHooks[key]=value end
+    pcall(function() env[key]=nil end)
+end
+
 load("main.lua")
 load("CuratedBootstrap.lua")
+load("DisableUnsafeClientHooks.lua")
 load("DisableLiveSilentAim.lua")
+
+-- Restore the executor environment after Yokai's legacy modules have been removed.
+for _,key in ipairs(hookKeys) do
+    local value=originalHooks[key]
+    pcall(function() env[key]=value end)
+end
+
 load("SimpleAntiFlingFinal.lua")
 load("UniversalMovementV2.lua")
 load("LocalNoclip.lua")
@@ -37,7 +57,6 @@ if isGunTesting then
 end
 
 -- Owner's bot/weapon practice experience: executor-only NPC training profile.
--- Triggered by structures shown in the owner's Explorer screenshots.
 local isOwnerBotPractice=(Workspace:FindFirstChild("Zombies")~=nil or Workspace:FindFirstChild("WeaponSystem_Workspace")~=nil)
 if isOwnerBotPractice then
     load("OwnerBotExecutorProfileV1.lua")
