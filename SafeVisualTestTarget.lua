@@ -1,6 +1,5 @@
 -- Safe visual test target. Never renders or inspects other real players.
--- It creates one local synthetic R6 target so ESP/health/skeleton/wallcheck/tracer
--- settings can be exercised reliably in Baseplate, Studio, or a private test map.
+-- One synthetic R6 target is used to verify Visuals controls reliably.
 
 repeat task.wait() until shared.YokaiFullyLoaded and shared.GuiLibrary
 
@@ -20,6 +19,7 @@ if not Visuals then return end
 local ZWSP = utf8.char(0x200B)
 local function clean(v) return tostring(v):gsub(ZWSP, "") end
 local function optionName(key) return clean(key):gsub("OptionsButton$", "") end
+
 local function isUnder(rec,parentRec)
     if not rec or not rec.Object or not parentRec then return false end
     local obj=rec.Object
@@ -28,42 +28,84 @@ local function isUnder(rec,parentRec)
     end
     return false
 end
+
 local function findVisualOption(name)
     local found
     for key,rec in pairs(objects) do
-        if rec and rec.Type=="OptionsButton" and optionName(key)==name and isUnder(rec,VisualsRec) then found=rec end
+        if rec and rec.Type=="OptionsButton" and optionName(key)==name and isUnder(rec,VisualsRec) then
+            found=rec
+        end
     end
     return found
 end
+
 local function enabled(name)
     local rec=findVisualOption(name)
     return rec and rec.Api and rec.Api.Enabled==true
 end
+
 local function removeVisualOption(name)
     local keys={}
     for key,rec in pairs(objects) do
-        if rec and rec.Type=="OptionsButton" and optionName(key)==name and isUnder(rec,VisualsRec) then table.insert(keys,key) end
+        if rec and rec.Type=="OptionsButton" and optionName(key)==name and isUnder(rec,VisualsRec) then
+            table.insert(keys,key)
+        end
     end
     for _,key in ipairs(keys) do
         local rec=objects[key]
-        pcall(function() if rec.Api and rec.Api.Enabled and rec.Api.ToggleButton then rec.Api.ToggleButton(false) end end)
+        pcall(function()
+            if rec.Api and rec.Api.Enabled and rec.Api.ToggleButton then rec.Api.ToggleButton(false) end
+        end)
         pcall(function() GuiLibrary["RemoveObject"](key) end)
     end
 end
 
--- Replace Skeleton with one shared-state version so Preview/test target use the same settings.
+local function removeSubcontrol(parentRec, needle)
+    if not parentRec then return end
+    local keys={}
+    for key,rec in pairs(objects) do
+        if rec and rec.Object and isUnder(rec,parentRec) and clean(key):find(needle,1,true) then
+            table.insert(keys,key)
+        end
+    end
+    for _,key in ipairs(keys) do
+        pcall(function() GuiLibrary["RemoveObject"](key) end)
+    end
+end
+
+-- Skeleton uses one state for the menu and rendered test target.
 removeVisualOption("Skeleton")
 local skeletonState={Enabled=false,Color=Color3.fromRGB(255,255,255),Transparency=0,Thickness=1}
 shared.YokaiSafeTestSkeletonState=skeletonState
 local Skeleton=Visuals.CreateOptionsButton({
     ["Name"]="Skeleton",
     ["Function"]=function(v) skeletonState.Enabled=v end,
-    ["HoverText"]="Safe visual-test skeleton settings.",
+    ["HoverText"]="Visual-test skeleton settings.",
 })
 Skeleton.CreateColorSlider({["Name"]="Color",["Function"]=function(h,s,v) skeletonState.Color=Color3.fromHSV(h,s,v) end})
 Skeleton.CreateSlider({["Name"]="Transparency",["Min"]=0,["Max"]=95,["Default"]=0,["Function"]=function(v) skeletonState.Transparency=v/100 end})
 Skeleton.CreateSlider({["Name"]="Thickness",["Min"]=1,["Max"]=5,["Default"]=1,["Function"]=function(v) skeletonState.Thickness=v end})
 
+-- HealthBar palette is owned HERE, by the same file that renders the bar.
+-- This removes the old disconnected Palette dropdown instead of relying on shared state.
+local healthRec=findVisualOption("HealthBar")
+local healthPalette="Blue / Red"
+removeSubcontrol(healthRec,"Palette")
+if healthRec and healthRec.Api then
+    pcall(function()
+        healthRec.Api.CreateDropdown({
+            ["Name"]="Palette",
+            ["List"]={"Blue / Red","Mint / Yellow / Red"},
+            ["Function"]=function(v)
+                healthPalette=v
+                shared.YokaiHealthPalette=v
+            end,
+        })
+    end)
+end
+shared.YokaiHealthPalette=healthPalette
+
+-- Remove stale synthetic targets/overlays from previous executions.
 local roots={LocalPlayer:FindFirstChildOfClass("PlayerGui"),CoreGui}
 pcall(function() if gethui then table.insert(roots,gethui()) end end)
 for _,root in ipairs(roots) do
@@ -119,10 +161,12 @@ local target=Instance.new("Model")
 target.Name="YokaiSafeVisualTestTarget"
 target.Parent=Workspace
 local hum=Instance.new("Humanoid")
-hum.MaxHealth=100 hum.Health=76 hum.Parent=target
+hum.MaxHealth=100
+hum.Health=76
+hum.Parent=target
 local base=spawnCFrame()
-local hrp=makePart(target,"HumanoidRootPart",Vector3.new(2,2,1),base*CFrame.new(0,0,0),Color3.new(1,1,1),1)
-makePart(target,"Torso",Vector3.new(2,2,1),base*CFrame.new(0,0,0))
+local hrp=makePart(target,"HumanoidRootPart",Vector3.new(2,2,1),base,Color3.new(1,1,1),1)
+makePart(target,"Torso",Vector3.new(2,2,1),base)
 makePart(target,"Head",Vector3.new(2,1,1),base*CFrame.new(0,1.5,0))
 makePart(target,"Left Arm",Vector3.new(1,2,1),base*CFrame.new(-1.5,0,0))
 makePart(target,"Right Arm",Vector3.new(1,2,1),base*CFrame.new(1.5,0,0))
@@ -154,6 +198,7 @@ local function newLine()
     f.Parent=overlay
     return f
 end
+
 local function setLine(f,a,b,thickness,color,transparency)
     local d=b-a
     if d.Magnitude<.01 then f.Visible=false return end
@@ -164,33 +209,69 @@ local function setLine(f,a,b,thickness,color,transparency)
     f.BackgroundTransparency=transparency or 0
     f.Visible=true
 end
-local function hideLines(t) for _,v in ipairs(t) do v.Visible=false end end
 
-local corners={} for i=1,8 do corners[i]=newLine() end
-local skeleton={} for i=1,5 do skeleton[i]=newLine() end
+local function hideLines(t)
+    for _,v in ipairs(t) do v.Visible=false end
+end
+
+local corners={}
+for i=1,8 do corners[i]=newLine() end
+local skeleton={}
+for i=1,5 do skeleton[i]=newLine() end
 local tracer=newLine()
 
 local name=Instance.new("TextLabel")
-name.BackgroundTransparency=1 name.AnchorPoint=Vector2.new(.5,.5) name.Size=UDim2.fromOffset(220,18)
-name.Font=Enum.Font.Code name.TextSize=12 name.TextStrokeTransparency=0 name.TextStrokeColor3=Color3.new(0,0,0)
-name.TextColor3=Color3.new(1,1,1) name.Text="VisualTestTarget" name.Visible=false name.Parent=overlay
-local distance=name:Clone() distance.TextSize=11 distance.Parent=overlay
-local healthText=name:Clone() healthText.Size=UDim2.fromOffset(42,16) healthText.TextSize=11 healthText.Parent=overlay
-local healthBack=Instance.new("Frame") healthBack.BorderSizePixel=0 healthBack.BackgroundColor3=Color3.new(0,0,0) healthBack.Visible=false healthBack.Parent=overlay
-local health=Instance.new("Frame") health.BorderSizePixel=0 health.BackgroundColor3=Color3.new(1,1,1) health.Visible=false health.Parent=overlay
-local healthGradient=Instance.new("UIGradient") healthGradient.Rotation=-90 healthGradient.Parent=health
+name.BackgroundTransparency=1
+name.AnchorPoint=Vector2.new(.5,.5)
+name.Size=UDim2.fromOffset(220,18)
+name.Font=Enum.Font.Code
+name.TextSize=12
+name.TextStrokeTransparency=0
+name.TextStrokeColor3=Color3.new(0,0,0)
+name.TextColor3=Color3.new(1,1,1)
+name.Text="VisualTestTarget"
+name.Visible=false
+name.Parent=overlay
+local distance=name:Clone()
+distance.TextSize=11
+distance.Parent=overlay
+local healthText=name:Clone()
+healthText.Size=UDim2.fromOffset(42,16)
+healthText.TextSize=11
+healthText.Parent=overlay
+local healthBack=Instance.new("Frame")
+healthBack.BorderSizePixel=0
+healthBack.BackgroundColor3=Color3.new(0,0,0)
+healthBack.Visible=false
+healthBack.Parent=overlay
+local health=Instance.new("Frame")
+health.BorderSizePixel=0
+health.BackgroundColor3=Color3.new(1,1,1)
+health.Visible=false
+health.Parent=overlay
+local healthGradient=Instance.new("UIGradient")
+healthGradient.Rotation=-90
+healthGradient.Parent=health
 
-local function palette()
-    local p=shared.YokaiPreviewPolishState or {}
-    if p.HealthPalette=="Mint / Yellow / Red" then
-        return ColorSequence.new({
-            ColorSequenceKeypoint.new(0,Color3.fromRGB(230,55,55)),
-            ColorSequenceKeypoint.new(.5,Color3.fromRGB(255,226,120)),
-            ColorSequenceKeypoint.new(1,Color3.fromRGB(120,255,205)),
-        })
+local BLUE_RED=ColorSequence.new({
+    ColorSequenceKeypoint.new(0,Color3.fromRGB(220,40,50)),
+    ColorSequenceKeypoint.new(1,Color3.fromRGB(50,110,255)),
+})
+local MINT_YELLOW_RED=ColorSequence.new({
+    ColorSequenceKeypoint.new(0,Color3.fromRGB(230,55,55)),
+    ColorSequenceKeypoint.new(.5,Color3.fromRGB(255,226,120)),
+    ColorSequenceKeypoint.new(1,Color3.fromRGB(120,255,205)),
+})
+
+local function applyHealthPalette()
+    local selected=healthPalette
+    if shared.YokaiHealthPalette and shared.YokaiHealthPalette~=selected then
+        selected=shared.YokaiHealthPalette
+        healthPalette=selected
     end
-    return ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(220,40,50)),ColorSequenceKeypoint.new(1,Color3.fromRGB(50,110,255))})
+    healthGradient.Color=(selected=="Mint / Yellow / Red") and MINT_YELLOW_RED or BLUE_RED
 end
+applyHealthPalette()
 
 local function bounds(model)
     local cam=Workspace.CurrentCamera
@@ -198,11 +279,21 @@ local function bounds(model)
     local cf,size=model:GetBoundingBox()
     local minX,minY,maxX,maxY=math.huge,math.huge,-math.huge,-math.huge
     local any=false
-    for x=-1,1,2 do for y=-1,1,2 do for z=-1,1,2 do
-        local wp=(cf*CFrame.new(size.X*x/2,size.Y*y/2,size.Z*z/2)).Position
-        local p=cam:WorldToViewportPoint(wp)
-        if p.Z>0 then any=true minX=math.min(minX,p.X) minY=math.min(minY,p.Y) maxX=math.max(maxX,p.X) maxY=math.max(maxY,p.Y) end
-    end end end
+    for x=-1,1,2 do
+        for y=-1,1,2 do
+            for z=-1,1,2 do
+                local wp=(cf*CFrame.new(size.X*x/2,size.Y*y/2,size.Z*z/2)).Position
+                local p=cam:WorldToViewportPoint(wp)
+                if p.Z>0 then
+                    any=true
+                    minX=math.min(minX,p.X)
+                    minY=math.min(minY,p.Y)
+                    maxX=math.max(maxX,p.X)
+                    maxY=math.max(maxY,p.Y)
+                end
+            end
+        end
+    end
     if not any or maxX<0 or maxY<0 or minX>cam.ViewportSize.X or minY>cam.ViewportSize.Y then return nil end
     return Vector2.new(minX,minY),Vector2.new(maxX,maxY)
 end
@@ -242,8 +333,17 @@ local function tracerOrigin()
     if o=="Mouse" then return UserInputService:GetMouseLocation() end
     return Vector2.new(vp.X/2,vp.Y)
 end
+
 local function hideAll()
-    highlight.Enabled=false name.Visible=false distance.Visible=false healthText.Visible=false healthBack.Visible=false health.Visible=false tracer.Visible=false hideLines(corners) hideLines(skeleton)
+    highlight.Enabled=false
+    name.Visible=false
+    distance.Visible=false
+    healthText.Visible=false
+    healthBack.Visible=false
+    health.Visible=false
+    tracer.Visible=false
+    hideLines(corners)
+    hideLines(skeleton)
 end
 
 RunService.RenderStepped:Connect(function()
@@ -263,25 +363,50 @@ RunService.RenderStepped:Connect(function()
     local tracerOn=enabled("Tracers")
     local state=shared.YokaiVisualPreviewState or {}
     local color=state.DefaultColor or Color3.fromRGB(119,120,255)
-    if espOn and state.WallCheck then color=wallVisible(head or root) and (state.VisibleColor or Color3.fromRGB(35,235,95)) or (state.OccludedColor or Color3.fromRGB(245,55,55)) end
+    if espOn and state.WallCheck then
+        color=wallVisible(head or root) and (state.VisibleColor or Color3.fromRGB(35,235,95)) or (state.OccludedColor or Color3.fromRGB(245,55,55))
+    end
 
-    highlight.Adornee=target highlight.Enabled=espOn highlight.FillColor=color highlight.OutlineColor=color
+    highlight.Adornee=target
+    highlight.Enabled=espOn
+    highlight.FillColor=color
+    highlight.OutlineColor=color
     if cornerOn then updateCorners(tl,br,color) else hideLines(corners) end
 
     local cx=(tl.X+br.X)/2
     if namesOn then
-        name.Position=UDim2.fromOffset(cx,tl.Y-11) name.Visible=true name.TextColor3=Color3.new(1,1,1)
+        name.Position=UDim2.fromOffset(cx,tl.Y-11)
+        name.Visible=true
+        name.TextColor3=Color3.new(1,1,1)
         local d=(cam.CFrame.Position-root.Position).Magnitude/3.5714285714
-        distance.Position=UDim2.fromOffset(cx,br.Y+9) distance.Text=string.format("%d meters",math.floor(d)) distance.Visible=true distance.TextColor3=Color3.new(1,1,1)
-    else name.Visible=false distance.Visible=false end
+        distance.Position=UDim2.fromOffset(cx,br.Y+9)
+        distance.Text=string.format("%d meters",math.floor(d))
+        distance.Visible=true
+        distance.TextColor3=Color3.new(1,1,1)
+    else
+        name.Visible=false
+        distance.Visible=false
+    end
 
     if healthOn then
+        applyHealthPalette()
         local ratio=math.clamp(hum.Health/math.max(1,hum.MaxHealth),0,1)
         local h=math.max(4,br.Y-tl.Y)
-        healthBack.Position=UDim2.fromOffset(tl.X-7,tl.Y) healthBack.Size=UDim2.fromOffset(4,h) healthBack.Visible=true
-        health.Position=UDim2.fromOffset(tl.X-7,tl.Y+h*(1-ratio)) health.Size=UDim2.fromOffset(4,h*ratio) healthGradient.Color=palette() health.Visible=true
-        healthText.Position=UDim2.fromOffset(tl.X-20,tl.Y+h*(1-ratio)) healthText.Text=tostring(math.floor(ratio*100)) healthText.Visible=true healthText.TextColor3=Color3.new(1,1,1)
-    else healthBack.Visible=false health.Visible=false healthText.Visible=false end
+        healthBack.Position=UDim2.fromOffset(tl.X-7,tl.Y)
+        healthBack.Size=UDim2.fromOffset(4,h)
+        healthBack.Visible=true
+        health.Position=UDim2.fromOffset(tl.X-7,tl.Y+h*(1-ratio))
+        health.Size=UDim2.fromOffset(4,h*ratio)
+        health.Visible=true
+        healthText.Position=UDim2.fromOffset(tl.X-20,tl.Y+h*(1-ratio))
+        healthText.Text=tostring(math.floor(ratio*100))
+        healthText.Visible=true
+        healthText.TextColor3=Color3.new(1,1,1)
+    else
+        healthBack.Visible=false
+        health.Visible=false
+        healthText.Visible=false
+    end
 
     if skeletonState.Enabled and head and torso then
         local parts={head,torso,target:FindFirstChild("Left Arm"),target:FindFirstChild("Right Arm"),target:FindFirstChild("Left Leg"),target:FindFirstChild("Right Leg")}
@@ -291,10 +416,22 @@ RunService.RenderStepped:Connect(function()
             if a and b then
                 local pa,ona=cam:WorldToViewportPoint(a.Position)
                 local pb,onb=cam:WorldToViewportPoint(b.Position)
-                if ona and onb and pa.Z>0 and pb.Z>0 then setLine(skeleton[i],Vector2.new(pa.X,pa.Y),Vector2.new(pb.X,pb.Y),skeletonState.Thickness,skeletonState.Color,skeletonState.Transparency) else skeleton[i].Visible=false end
-            else skeleton[i].Visible=false end
+                if ona and onb and pa.Z>0 and pb.Z>0 then
+                    setLine(skeleton[i],Vector2.new(pa.X,pa.Y),Vector2.new(pb.X,pb.Y),skeletonState.Thickness,skeletonState.Color,skeletonState.Transparency)
+                else
+                    skeleton[i].Visible=false
+                end
+            else
+                skeleton[i].Visible=false
+            end
         end
-    else hideLines(skeleton) end
+    else
+        hideLines(skeleton)
+    end
 
-    if tracerOn then setLine(tracer,tracerOrigin(),Vector2.new(cx,br.Y),1,color,0) else tracer.Visible=false end
+    if tracerOn then
+        setLine(tracer,tracerOrigin(),Vector2.new(cx,br.Y),1,color,0)
+    else
+        tracer.Visible=false
+    end
 end)
