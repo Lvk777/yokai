@@ -1,16 +1,41 @@
 local BASE = "https://raw.githubusercontent.com/Lvk777/yokai/refs/heads/custom/curated-yokai-final/"
-loadstring(game:HttpGet(BASE .. "main.lua", true))()
-loadstring(game:HttpGet(BASE .. "CuratedBootstrap.lua", true))()
-loadstring(game:HttpGet(BASE .. "SimpleAntiFlingFinal.lua", true))()
-loadstring(game:HttpGet(BASE .. "SafeTargetAllInOne.lua", true))()
-loadstring(game:HttpGet(BASE .. "SafeTargetPolishFinal.lua", true))()
-loadstring(game:HttpGet(BASE .. "SafeTargetESPFinal.lua", true))()
-loadstring(game:HttpGet(BASE .. "SafeTargetVisualsUXV2.lua", true))()
-loadstring(game:HttpGet(BASE .. "UniversalMovementV2.lua", true))()
-loadstring(game:HttpGet(BASE .. "LocalNoclip.lua", true))()
-loadstring(game:HttpGet(BASE .. "FinalVisualPolishV4.lua", true))()
-loadstring(game:HttpGet(BASE .. "BotArenaAdapter.lua", true))()
-loadstring(game:HttpGet(BASE .. "GunTestingRuntimePolish.lua", true))()
-loadstring(game:HttpGet(BASE .. "GunTestingAimViewmodelV2.lua", true))()
-loadstring(game:HttpGet(BASE .. "GunTestingPluginIntegrationV3.lua", true))()
-loadstring(game:HttpGet(BASE .. "GunTestingSafeUXV4.lua", true))()
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local function load(name)
+    local ok,err=pcall(function() loadstring(game:HttpGet(BASE .. name, true))() end)
+    if not ok then warn("[Yokai loader] "..name.." failed: "..tostring(err)) end
+end
+
+load("main.lua")
+load("CuratedBootstrap.lua")
+load("SimpleAntiFlingFinal.lua")
+load("UniversalMovementV2.lua")
+load("LocalNoclip.lua")
+load("FinalVisualPolishV4.lua")
+
+-- Synthetic target layers are test tools; do not load their extra render loops in normal games.
+if RunService:IsStudio() then
+    load("SafeTargetAllInOne.lua")
+    load("SafeTargetPolishFinal.lua")
+    load("SafeTargetESPFinal.lua")
+    load("SafeTargetVisualsUXV2.lua")
+end
+
+-- Gun Testing passive/local profile only. Heavy aim/shoot overrides are intentionally not loaded.
+local lp=Players.LocalPlayer
+local playerScripts=lp and lp:FindFirstChild("PlayerScripts")
+local gunController=playerScripts and playerScripts:FindFirstChild("GunController")
+local gunEvents=gunController and gunController:FindFirstChild("Events")
+local gunPlugin=gunEvents and gunEvents:FindFirstChild("GunPlugin")
+local isGunTesting=(lp and lp:FindFirstChild("GunInventory")~=nil and gunPlugin~=nil)
+if isGunTesting then
+    load("GunTestingRuntimePolish.lua")
+    load("GunTestingSafeUXV4.lua")
+end
+
+-- Vehicle-heavy maps get an event-driven Car ESP and reversible FPS Boost.
+if Workspace:FindFirstChild("Vehicles") then
+    load("VehicleMapPerformanceV1.lua")
+end
