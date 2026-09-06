@@ -67,4 +67,5 @@ end
 local isOwnerBotPractice=(Workspace:FindFirstChild("Zombies")~=nil or Workspace:FindFirstChild("WeaponSystem_Workspace")~=nil)
 if isOwnerBotPractice then
     load("OwnerBotPracticeRuntimeV2.lua")
+    load("OwnerBotAimVisualUXV3.lua")
 end
