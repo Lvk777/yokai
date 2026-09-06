@@ -130,3 +130,7 @@ end
 
 -- Absolute final UI ordering pass. It never deletes feature controls.
 load("FinalMenuPinV10.lua")
+
+-- Final persistence guard. From this point onward, late profile/settings callbacks
+-- are not allowed to delete the custom controls that were intentionally created above.
+load("PersistentCustomMenuGuardV11.lua")
