@@ -54,9 +54,6 @@ local function vehicleProfileReady()
     return Workspace:FindFirstChild("Vehicles")~=nil
 end
 
--- Decide the bootstrap BEFORE loading the old patch stack. This is the important
--- change: bot maps never execute CuratedBootstrap's long chain of delayed visual/UI
--- replacements, which was restoring the legacy menu after the custom one appeared.
 if not botProfileReady() and not vehicleProfileReady() then
     local deadline=os.clock()+15
     repeat task.wait(.15) until botProfileReady() or vehicleProfileReady() or os.clock()>=deadline
@@ -77,13 +74,10 @@ for _,key in ipairs(hookKeys) do
     pcall(function() env[key]=value end)
 end
 
--- Small common local utilities only.
 load("SimpleAntiFlingFinal.lua")
 load("UniversalMovementV2.lua")
 load("LocalNoclip.lua")
 
--- Synthetic target polish belongs to Studio only. It is intentionally not loaded
--- in the live bot profile anymore.
 if RunService:IsStudio() and not isBotProfile then
     load("SafeTargetAllInOne.lua")
     load("SafeTargetPolishFinal.lua")
@@ -92,7 +86,6 @@ if RunService:IsStudio() and not isBotProfile then
     load("FinalVisualPolishV4.lua")
 end
 
--- Older Gun Testing profile is separate from the current WeaponSystem bot map.
 local playerScripts=lp and lp:FindFirstChild("PlayerScripts")
 local gunController=playerScripts and playerScripts:FindFirstChild("GunController")
 local gunEvents=gunController and gunController:FindFirstChild("Events")
@@ -103,7 +96,6 @@ if isGunTesting then
     load("GunTestingSafeUXV4.lua")
 end
 
--- Preserve the currently-open main windows before final bot replacements.
 if isBotProfile then
     pcall(function()
         local gl=shared.GuiLibrary
@@ -122,20 +114,14 @@ end
 if vehicleProfileReady() then load("VehicleMapPerformanceV1.lua") end
 
 if isBotProfile then
-    -- One deterministic stack. Older V4/V6 menu owners are deliberately omitted;
-    -- V8/V9/V10 supersede those jobs and V5 owns the WeaponSystem controls.
+    -- Keep the previous working Visuals owner from OwnerBotPracticeRuntimeV2.
+    -- Do not load BotVisualsReliableV14 here: it replaced the working callbacks.
     load("OwnerBotPracticeRuntimeV2.lua")
     load("OwnerBotAimVisualUXV3.lua")
     load("OwnerBotDamageNotificationsV7.lua")
     load("FullBrightnessFinalV8.lua")
     load("FinalMenuPerformanceV9.lua")
     load("OwnerBotWeaponAndMenuV5.lua")
-
-    -- Final target-visual owner. Loaded after weapon integration so no later gameplay
-    -- patch replaces its callbacks; it only targets NPC/bot models and does not touch
-    -- local GunChams/SelfChams or the other menu categories.
-    load("BotVisualsReliableV14.lua")
-
     load("FinalMenuPinV10.lua")
     load("StableCustomMenuSnapshotV13.lua")
 end
