@@ -27,6 +27,9 @@ for _,key in ipairs(hookKeys) do
 end
 
 load("main.lua")
+-- Install the notification filter before the patch stack so repetitive
+-- "... loaded" notices never flood the right side of the screen.
+load("NotificationHygieneEarly.lua")
 load("CuratedBootstrap.lua")
 load("DisableUnsafeClientHooks.lua")
 load("DisableLiveSilentAim.lua")
@@ -84,7 +87,7 @@ end
 
 -- Owner bot/weapon practice profile. Final layers are intentionally loaded in a
 -- deterministic order. V5 integrates with this WeaponSystem; V6 only fixes menu
--- visibility/scroll/subcontrol ordering.
+-- visibility/scroll/subcontrol ordering. V7 restores concise damage/part feedback.
 if botProfileReady() then
     load("OwnerBotPracticeRuntimeV2.lua")
     load("OwnerBotAimVisualUXV3.lua")
@@ -95,4 +98,5 @@ if botProfileReady() then
         load("OwnerBotWeaponAndMenuV5.lua")
     end
     load("OwnerBotMenuVisibilityV6.lua")
+    load("OwnerBotDamageNotificationsV7.lua")
 end
