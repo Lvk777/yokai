@@ -1,74 +1,62 @@
--- Local extras intentionally kept while restoring the older Gun Testing V3 baseline.
--- UI/local-only: brightness, animated crosshair, FPS boost, menu optimizer and car ESP.
+-- Preserved local extras for the restored Gun Testing V3 baseline.
+-- Optimized revision: no permanent per-frame work while a feature is disabled.
+-- Features kept: FullBrightness, animated Crosshair, FPS Boost, Menu Optimizer, Car ESP.
 
 repeat task.wait() until shared.YokaiFullyLoaded and shared.GuiLibrary
 
-local GuiLibrary = shared.GuiLibrary
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
-local Lighting = game:GetService("Lighting")
-local CoreGui = game:GetService("CoreGui")
+local GuiLibrary=shared.GuiLibrary
+local Players=game:GetService("Players")
+local RunService=game:GetService("RunService")
+local Workspace=game:GetService("Workspace")
+local Lighting=game:GetService("Lighting")
+local CoreGui=game:GetService("CoreGui")
 
-local LocalPlayer = Players.LocalPlayer
-local objects = GuiLibrary.ObjectsThatCanBeSaved or {}
-local VisualsRec = objects.VisualsWindow
-local UtilityRec = objects.UtilityWindow
-local Visuals = VisualsRec and VisualsRec.Api
-local Utility = UtilityRec and UtilityRec.Api
+local LocalPlayer=Players.LocalPlayer
+local objects=GuiLibrary.ObjectsThatCanBeSaved or {}
+local VisualsRec=objects.VisualsWindow
+local UtilityRec=objects.UtilityWindow
+local Visuals=VisualsRec and VisualsRec.Api
+local Utility=UtilityRec and UtilityRec.Api
 if not (Visuals and Utility) then return end
 
-local ZWSP = utf8.char(0x200B)
-local function unique(name,n) return name .. string.rep(ZWSP,n or 1) end
+local ZWSP=utf8.char(0x200B)
+local function unique(name,n) return name..string.rep(ZWSP,n or 1) end
 
--- ---------------------------------------------------------------------------
--- FULL BRIGHTNESS: post-processing only, so it does not fight the game's day/night.
--- ---------------------------------------------------------------------------
-local brightnessEnabled = false
-local brightnessStrength = 65
-local cc = Lighting:FindFirstChild("YokaiPreservedBrightnessV15")
-if cc then cc:Destroy() end
-cc = Instance.new("ColorCorrectionEffect")
-cc.Name = "YokaiPreservedBrightnessV15"
-cc.Enabled = false
-cc.Parent = Lighting
-
+-- ==========================================================================
+-- FULL BRIGHTNESS: one ColorCorrectionEffect, no day/night loop.
+-- ==========================================================================
+local brightnessEnabled=false
+local brightnessStrength=65
+local oldCC=Lighting:FindFirstChild("YokaiPreservedBrightnessV15")
+if oldCC then oldCC:Destroy() end
+local cc=Instance.new("ColorCorrectionEffect")
+cc.Name="YokaiPreservedBrightnessV15"
+cc.Enabled=false
+cc.Parent=Lighting
 local function applyBrightness()
-    cc.Enabled = brightnessEnabled
+    cc.Enabled=brightnessEnabled
     if brightnessEnabled then
-        local s = brightnessStrength / 100
-        cc.Brightness = 0.08 + 0.32 * s
-        cc.Contrast = -0.02 - 0.08 * s
-        cc.Saturation = 0.02 + 0.05 * s
+        local s=brightnessStrength/100
+        cc.Brightness=.08+.32*s
+        cc.Contrast=-.02-.08*s
+        cc.Saturation=.02+.05*s
     end
 end
-local Bright = Visuals.CreateOptionsButton({
-    Name = unique("FullBrightness",1),
-    Function = function(v) brightnessEnabled=v; applyBrightness() end,
-    HoverText = "Stable local brightness without fighting the map clock."
-})
+local Bright=Visuals.CreateOptionsButton({Name=unique("FullBrightness",1),Function=function(v) brightnessEnabled=v; applyBrightness() end,HoverText="Stable local brightness without fighting the map clock."})
 Bright.CreateSlider({Name="Strength",Min=0,Max=100,Default=65,Function=function(v) brightnessStrength=v; applyBrightness() end})
 
--- ---------------------------------------------------------------------------
--- ANIMATED CROSSHAIR. Uses GunPlugin hitmarker only when that local signal exists.
--- ---------------------------------------------------------------------------
-local parentGui = (gethui and gethui()) or CoreGui
-local oldHud = parentGui:FindFirstChild("YokaiPreservedCrosshairV15")
+-- ==========================================================================
+-- ANIMATED CROSSHAIR: RenderStepped exists only while enabled.
+-- ==========================================================================
+local parentGui=(gethui and gethui()) or CoreGui
+local oldHud=parentGui:FindFirstChild("YokaiPreservedCrosshairV15")
 if oldHud then oldHud:Destroy() end
-local Hud = Instance.new("ScreenGui")
-Hud.Name="YokaiPreservedCrosshairV15"
-Hud.ResetOnSpawn=false
-Hud.IgnoreGuiInset=true
-Hud.DisplayOrder=1002
-Hud.Parent=parentGui
+local Hud=Instance.new("ScreenGui")
+Hud.Name="YokaiPreservedCrosshairV15"; Hud.ResetOnSpawn=false; Hud.IgnoreGuiInset=true; Hud.DisplayOrder=1002; Hud.Parent=parentGui
 local Root=Instance.new("Frame")
 Root.AnchorPoint=Vector2.new(.5,.5); Root.Size=UDim2.fromOffset(1,1); Root.BackgroundTransparency=1; Root.Visible=false; Root.Parent=Hud
 local lines={}
-for i=1,4 do
-    local f=Instance.new("Frame")
-    f.Name="Line"..i; f.AnchorPoint=Vector2.new(.5,.5); f.BorderSizePixel=0; f.Parent=Root
-    lines[i]=f
-end
+for i=1,4 do local f=Instance.new("Frame"); f.Name="Line"..i; f.AnchorPoint=Vector2.new(.5,.5); f.BorderSizePixel=0; f.Parent=Root; lines[i]=f end
 local dot=Instance.new("Frame")
 dot.Name="Dot"; dot.AnchorPoint=Vector2.new(.5,.5); dot.Size=UDim2.fromOffset(2,2); dot.BorderSizePixel=0; dot.Parent=Root
 local dc=Instance.new("UICorner"); dc.CornerRadius=UDim.new(1,0); dc.Parent=dot
@@ -81,38 +69,13 @@ local crossThickness=1
 local crossSpeed=5
 local crossColor=Color3.fromRGB(205,225,255)
 local hitUntil=0
+local crossConn=nil
 
-local Cross=Visuals.CreateOptionsButton({Name=unique("Custom Crosshair",2),Function=function(v) crossEnabled=v end})
-Cross.CreateToggle({Name="Animated",Default=true,Function=function(v) crossAnimated=v end})
-Cross.CreateSlider({Name="Gap",Min=2,Max=20,Default=6,Function=function(v) crossGap=v end})
-Cross.CreateSlider({Name="Length",Min=4,Max=24,Default=8,Function=function(v) crossLength=v end})
-Cross.CreateSlider({Name="Thickness",Min=1,Max=4,Default=1,Function=function(v) crossThickness=v end})
-Cross.CreateSlider({Name="Animation Speed",Min=1,Max=12,Default=5,Function=function(v) crossSpeed=v end})
-Cross.CreateColorSlider({Name="Color",Function=function(h,s,v) crossColor=Color3.fromHSV(h,s,v) end})
-
--- Best-effort use of the game's local hitmarker signal; no remote firing or hooks.
-task.spawn(function()
-    local ok,plugin=pcall(function()
-        local ps=LocalPlayer:WaitForChild("PlayerScripts",8)
-        local gc=ps and ps:WaitForChild("GunController",8)
-        local ev=gc and gc:WaitForChild("Events",8)
-        local mod=ev and ev:WaitForChild("GunPlugin",8)
-        return mod and require(mod)
-    end)
-    if ok and type(plugin)=="table" and type(plugin.OnHitmarker)=="function" then
-        local ok2,sig=pcall(function() return plugin:OnHitmarker() end)
-        if ok2 and sig and type(sig.Connect)=="function" then
-            sig:Connect(function() hitUntil=os.clock()+.22 end)
-        end
-    end
-end)
-
-RunService.RenderStepped:Connect(function()
+local function renderCross()
     local cam=Workspace.CurrentCamera
     if not cam then return end
     local c=cam.ViewportSize/2
     Root.Position=UDim2.fromOffset(c.X,c.Y)
-    Root.Visible=crossEnabled
     if not crossEnabled then return end
     local pulse=crossAnimated and math.sin(os.clock()*crossSpeed)*1.6 or 0
     local gap=math.max(1,crossGap+pulse)
@@ -127,11 +90,37 @@ RunService.RenderStepped:Connect(function()
     }
     for i,f in ipairs(lines) do f.Position=spec[i][1]; f.Size=spec[i][2]; f.BackgroundColor3=col end
     dot.BackgroundColor3=col
+end
+local function setCrossEnabled(v)
+    crossEnabled=v; Root.Visible=v
+    if v and not crossConn then crossConn=RunService.RenderStepped:Connect(renderCross)
+    elseif not v and crossConn then crossConn:Disconnect(); crossConn=nil end
+end
+local Cross=Visuals.CreateOptionsButton({Name=unique("Custom Crosshair",2),Function=setCrossEnabled})
+Cross.CreateToggle({Name="Animated",Default=true,Function=function(v) crossAnimated=v end})
+Cross.CreateSlider({Name="Gap",Min=2,Max=20,Default=6,Function=function(v) crossGap=v end})
+Cross.CreateSlider({Name="Length",Min=4,Max=24,Default=8,Function=function(v) crossLength=v end})
+Cross.CreateSlider({Name="Thickness",Min=1,Max=4,Default=1,Function=function(v) crossThickness=v end})
+Cross.CreateSlider({Name="Animation Speed",Min=1,Max=12,Default=5,Function=function(v) crossSpeed=v end})
+Cross.CreateColorSlider({Name="Color",Function=function(h,s,v) crossColor=Color3.fromHSV(h,s,v) end})
+
+task.spawn(function()
+    local ok,plugin=pcall(function()
+        local ps=LocalPlayer:WaitForChild("PlayerScripts",8)
+        local gc=ps and ps:WaitForChild("GunController",8)
+        local ev=gc and gc:WaitForChild("Events",8)
+        local mod=ev and ev:WaitForChild("GunPlugin",8)
+        return mod and require(mod)
+    end)
+    if ok and type(plugin)=="table" and type(plugin.OnHitmarker)=="function" then
+        local ok2,sig=pcall(function() return plugin:OnHitmarker() end)
+        if ok2 and sig and type(sig.Connect)=="function" then sig:Connect(function() hitUntil=os.clock()+.22 end) end
+    end
 end)
 
--- ---------------------------------------------------------------------------
--- FPS BOOST: local visual reductions, reversible.
--- ---------------------------------------------------------------------------
+-- ==========================================================================
+-- FPS BOOST: one chunked scan when enabled + incremental new-object handling.
+-- ==========================================================================
 local fpsEnabled=false
 local fpsMode="Balanced"
 local originals=setmetatable({}, {__mode="k"})
@@ -145,56 +134,70 @@ local function optimizeObject(obj)
     elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") then save(obj,"Enabled"); obj.Enabled=false
     elseif fpsMode=="Aggressive" and (obj:IsA("Decal") or obj:IsA("Texture")) then save(obj,"Transparency"); obj.Transparency=1 end
 end
-local function applyFPS()
-    if fpsEnabled then
-        if fpsMode~="Light" then save(Lighting,"GlobalShadows"); Lighting.GlobalShadows=false end
-        task.spawn(function()
-            local all=Workspace:GetDescendants()
-            for i,obj in ipairs(all) do optimizeObject(obj); if i%350==0 then task.wait() end end
-            for _,obj in ipairs(Lighting:GetChildren()) do optimizeObject(obj) end
-        end)
-    else
-        for obj,props in pairs(originals) do
-            if obj and obj.Parent then for prop,val in pairs(props) do pcall(function() obj[prop]=val end) end end
-        end
-        table.clear(originals)
+local function restoreFPS()
+    for obj,props in pairs(originals) do
+        if obj and obj.Parent then for prop,val in pairs(props) do pcall(function() obj[prop]=val end) end end
     end
+    table.clear(originals)
+end
+local scanGeneration=0
+local function applyFPS()
+    scanGeneration+=1
+    local myGen=scanGeneration
+    if not fpsEnabled then restoreFPS(); return end
+    if fpsMode~="Light" then save(Lighting,"GlobalShadows"); Lighting.GlobalShadows=false end
+    task.spawn(function()
+        local all=Workspace:GetDescendants()
+        for i,obj in ipairs(all) do
+            if myGen~=scanGeneration or not fpsEnabled then return end
+            optimizeObject(obj)
+            if i%600==0 then task.wait() end
+        end
+        for _,obj in ipairs(Lighting:GetChildren()) do if myGen==scanGeneration and fpsEnabled then optimizeObject(obj) end end
+    end)
 end
 local FPS=Utility.CreateOptionsButton({Name=unique("FPS Boost",3),Function=function(v) fpsEnabled=v; applyFPS() end})
-FPS.CreateDropdown({Name="Mode",List={"Light","Balanced","Aggressive"},Function=function(v) fpsMode=v; if fpsEnabled then applyFPS() end end})
+FPS.CreateDropdown({Name="Mode",List={"Light","Balanced","Aggressive"},Function=function(v) fpsMode=v; if fpsEnabled then restoreFPS(); applyFPS() end end})
 Workspace.DescendantAdded:Connect(function(obj) if fpsEnabled then task.defer(optimizeObject,obj) end end)
+Lighting.ChildAdded:Connect(function(obj) if fpsEnabled then task.defer(optimizeObject,obj) end end)
 
--- ---------------------------------------------------------------------------
--- MENU OPTIMIZER: only removes decorative shadows from the Yokai UI.
--- ---------------------------------------------------------------------------
+-- ==========================================================================
+-- MENU OPTIMIZER: decorative-only; no buttons/functions are deleted.
+-- ==========================================================================
 local menuEnabled=false
 local menuSaved=setmetatable({}, {__mode="k"})
+local function decorativeGui(d)
+    if not d:IsA("GuiObject") then return false end
+    local n=d.Name:lower()
+    return n:find("shadow",1,true)~=nil or n:find("blur",1,true)~=nil or n:find("glow",1,true)~=nil
+end
+local function handleMenuObject(d)
+    if menuEnabled and decorativeGui(d) and menuSaved[d]==nil then menuSaved[d]=d.Visible; d.Visible=false end
+end
 local function optimizeMenu(v)
     menuEnabled=v
     local root=GuiLibrary.MainGui
     if not root then return end
     if v then
-        for _,d in ipairs(root:GetDescendants()) do
-            local n=d.Name:lower()
-            if (n:find("shadow",1,true) or n:find("blur",1,true)) and d:IsA("GuiObject") then
-                menuSaved[d]=d.Visible
-                d.Visible=false
-            end
-        end
+        for _,d in ipairs(root:GetDescendants()) do handleMenuObject(d) end
     else
         for d,val in pairs(menuSaved) do if d and d.Parent then pcall(function() d.Visible=val end) end end
         table.clear(menuSaved)
     end
 end
-Utility.CreateOptionsButton({Name=unique("Menu Optimizer",4),Function=optimizeMenu})
+Utility.CreateOptionsButton({Name=unique("Menu Optimizer",4),Function=optimizeMenu,HoverText="Disables decorative shadows/glows only; keeps all controls and callbacks."})
+if GuiLibrary.MainGui then GuiLibrary.MainGui.DescendantAdded:Connect(function(d) if menuEnabled then task.defer(handleMenuObject,d) end end) end
 
--- ---------------------------------------------------------------------------
--- CAR ESP: passive local vehicle highlights only.
--- ---------------------------------------------------------------------------
+-- ==========================================================================
+-- CAR ESP: event-driven vehicle registration + 5 Hz updates while enabled only.
+-- ==========================================================================
 local carEnabled=false
 local carColor=Color3.fromRGB(60,220,180)
 local carDistance=2500
 local cars=setmetatable({}, {__mode="k"})
+local vehicles=nil
+local vehicleChildConn=nil
+local carLoopToken=0
 local function isVehicle(m)
     if not m or not m:IsA("Model") then return false end
     if m:FindFirstChildWhichIsA("VehicleSeat",true) then return true end
@@ -210,19 +213,20 @@ local function addCar(m)
     local t=Instance.new("TextLabel"); t.BackgroundTransparency=1; t.Size=UDim2.fromScale(1,1); t.Font=Enum.Font.GothamSemibold; t.TextSize=12; t.TextStrokeTransparency=.45; t.Parent=bb
     cars[m]={h=h,bb=bb,t=t,a=a}
 end
-local Car=Visuals.CreateOptionsButton({Name=unique("Car ESP",5),Function=function(v) carEnabled=v end})
-Car.CreateColorSlider({Name="Color",Function=function(h,s,v) carColor=Color3.fromHSV(h,s,v) end})
-Car.CreateSlider({Name="Distance",Min=100,Max=5000,Default=2500,Function=function(v) carDistance=v end})
-local vehicles=Workspace:FindFirstChild("Vehicles")
-if vehicles then
-    for _,m in ipairs(vehicles:GetChildren()) do addCar(m) end
-    vehicles.ChildAdded:Connect(function(m) task.defer(addCar,m) end)
-end
-RunService.Heartbeat:Connect(function()
-    if not vehicles or not vehicles.Parent then
-        vehicles=Workspace:FindFirstChild("Vehicles")
-        if vehicles then for _,m in ipairs(vehicles:GetChildren()) do addCar(m) end end
+local function attachVehiclesFolder(folder)
+    if vehicles==folder then return end
+    if vehicleChildConn then vehicleChildConn:Disconnect(); vehicleChildConn=nil end
+    vehicles=folder
+    if vehicles then
+        for _,m in ipairs(vehicles:GetChildren()) do addCar(m) end
+        vehicleChildConn=vehicles.ChildAdded:Connect(function(m) task.defer(addCar,m) end)
     end
+end
+attachVehiclesFolder(Workspace:FindFirstChild("Vehicles"))
+Workspace.ChildAdded:Connect(function(c) if c.Name=="Vehicles" then attachVehiclesFolder(c) end end)
+Workspace.ChildRemoved:Connect(function(c) if c==vehicles then attachVehiclesFolder(nil) end end)
+
+local function updateCarsOnce()
     local cam=Workspace.CurrentCamera
     for m,s in pairs(cars) do
         if not m.Parent or not s.a or not s.a.Parent then
@@ -237,6 +241,21 @@ RunService.Heartbeat:Connect(function()
             end
         end
     end
-end)
+end
+local function setCarEnabled(v)
+    carEnabled=v; carLoopToken+=1
+    local token=carLoopToken
+    if not v then updateCarsOnce(); return end
+    task.spawn(function()
+        while carEnabled and token==carLoopToken and shared.YokaiExecuted~=false do
+            if not vehicles then attachVehiclesFolder(Workspace:FindFirstChild("Vehicles")) end
+            updateCarsOnce()
+            task.wait(.20)
+        end
+    end)
+end
+local Car=Visuals.CreateOptionsButton({Name=unique("Car ESP",5),Function=setCarEnabled})
+Car.CreateColorSlider({Name="Color",Function=function(h,s,v) carColor=Color3.fromHSV(h,s,v) end})
+Car.CreateSlider({Name="Distance",Min=100,Max=5000,Default=2500,Function=function(v) carDistance=v end})
 
 shared.YokaiPreservedLocalExtrasV15=true
