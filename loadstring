@@ -60,14 +60,34 @@ if isGunTesting then
     load("GunTestingSafeUXV4.lua")
 end
 
+-- Recognize the bot-practice profile from either world folders OR the replicated
+-- client weapon framework. This prevents the final controls from being skipped
+-- when Workspace folders stream in later than the loader.
+local function hasClientGunSystem()
+    local ps=lp and lp:FindFirstChild("PlayerScripts")
+    local client=ps and ps:FindFirstChild("Client")
+    local systems=client and client:FindFirstChild("Systems")
+    return systems and systems:FindFirstChild("GunSystem")~=nil
+end
+local function hasWeaponTool()
+    local backpack=lp and lp:FindFirstChildOfClass("Backpack")
+    if not backpack then return false end
+    for _,obj in ipairs(backpack:GetChildren()) do
+        if obj:IsA("Tool") and (obj:FindFirstChild("WeaponConfig") or obj:FindFirstChild("Ammo")) then return true end
+    end
+    return false
+end
 local function botProfileReady()
-    return Workspace:FindFirstChild("Zombies")~=nil or Workspace:FindFirstChild("WeaponSystem_Workspace")~=nil
+    return Workspace:FindFirstChild("Zombies")~=nil
+        or Workspace:FindFirstChild("WeaponSystem_Workspace")~=nil
+        or hasClientGunSystem()
+        or hasWeaponTool()
 end
 local function vehicleProfileReady()
     return Workspace:FindFirstChild("Vehicles")~=nil
 end
 if not botProfileReady() and not vehicleProfileReady() then
-    local deadline=os.clock()+12
+    local deadline=os.clock()+15
     repeat task.wait(.15) until botProfileReady() or vehicleProfileReady() or os.clock()>=deadline
 end
 
@@ -90,17 +110,23 @@ if vehicleProfileReady() then
 end
 
 if botProfileReady() then
+    -- Passive visual layers first.
     load("OwnerBotPracticeRuntimeV2.lua")
     load("OwnerBotAimVisualUXV3.lua")
     load("OwnerBotVisualPolishV4.lua")
-    -- Run the integration once only. Retrying a partially failed monolithic patch
-    -- can remove controls twice and is the main source of "loads, then disappears".
-    load("OwnerBotWeaponAndMenuV5.lua")
     load("OwnerBotMenuVisibilityV6.lua")
     load("OwnerBotDamageNotificationsV7.lua")
     load("FullBrightnessFinalV8.lua")
 end
 
--- Always load the final passive UI/performance pass. In bot maps it also owns
--- Tracers + global Distance; elsewhere it only exposes reversible performance tools.
+-- Final passive menu/performance owner.
 load("FinalMenuPerformanceV9.lua")
+
+if botProfileReady() then
+    -- Load the game-specific weapon integration AFTER every generic patch so its
+    -- Combat controls cannot be removed/replaced by a later compatibility layer.
+    load("OwnerBotWeaponAndMenuV5.lua")
+end
+
+-- Absolute final UI ordering pass. It never deletes feature controls.
+load("FinalMenuPinV10.lua")
