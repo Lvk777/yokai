@@ -14,12 +14,12 @@ local function load(name)
     return ok,err
 end
 
--- Compatibility loading mode: temporarily hide executor hook APIs while the base
--- GUI/module pack is being created. This prevents saved legacy modules such as
--- ClientKickDisable/SilentAim from installing __namecall hooks during startup.
-local env = (getgenv and getgenv()) or _G
-local hookKeys = {"hookmetamethod","getnamecallmethod","getrawmetatable","setreadonly","make_writeable","hookfunction"}
-local originalHooks = {}
+-- Keep legacy hook APIs unavailable while the base/curated module set is created.
+-- This prevents old kick/namecall modules from installing themselves; it does not
+-- attempt to bypass or hide from game-side protections.
+local env=(getgenv and getgenv()) or _G
+local hookKeys={"hookmetamethod","getnamecallmethod","getrawmetatable","setreadonly","make_writeable","hookfunction"}
+local originalHooks={}
 for _,key in ipairs(hookKeys) do
     local ok,value=pcall(function() return env[key] end)
     if ok and value~=nil then originalHooks[key]=value end
@@ -28,41 +28,8 @@ end
 
 load("main.lua")
 load("NotificationHygieneEarly.lua")
-load("CuratedBootstrap.lua")
-load("DisableUnsafeClientHooks.lua")
-load("DisableLiveSilentAim.lua")
-
-for _,key in ipairs(hookKeys) do
-    local value=originalHooks[key]
-    pcall(function() env[key]=value end)
-end
-
-load("SimpleAntiFlingFinal.lua")
-load("UniversalMovementV2.lua")
-load("LocalNoclip.lua")
-load("FinalVisualPolishV4.lua")
-
-if RunService:IsStudio() then
-    load("SafeTargetAllInOne.lua")
-    load("SafeTargetPolishFinal.lua")
-    load("SafeTargetESPFinal.lua")
-    load("SafeTargetVisualsUXV2.lua")
-end
 
 local lp=Players.LocalPlayer
-local playerScripts=lp and lp:FindFirstChild("PlayerScripts")
-local gunController=playerScripts and playerScripts:FindFirstChild("GunController")
-local gunEvents=gunController and gunController:FindFirstChild("Events")
-local gunPlugin=gunEvents and gunEvents:FindFirstChild("GunPlugin")
-local isGunTesting=(lp and lp:FindFirstChild("GunInventory")~=nil and gunPlugin~=nil)
-if isGunTesting then
-    load("GunTestingRuntimePolish.lua")
-    load("GunTestingSafeUXV4.lua")
-end
-
--- Recognize the bot-practice profile from either world folders OR the replicated
--- client weapon framework. This prevents the final controls from being skipped
--- when Workspace folders stream in later than the loader.
 local function hasClientGunSystem()
     local ps=lp and lp:FindFirstChild("PlayerScripts")
     local client=ps and ps:FindFirstChild("Client")
@@ -86,51 +53,83 @@ end
 local function vehicleProfileReady()
     return Workspace:FindFirstChild("Vehicles")~=nil
 end
+
+-- Decide the bootstrap BEFORE loading the old patch stack. This is the important
+-- change: bot maps never execute CuratedBootstrap's long chain of delayed visual/UI
+-- replacements, which was restoring the legacy menu after the custom one appeared.
 if not botProfileReady() and not vehicleProfileReady() then
     local deadline=os.clock()+15
     repeat task.wait(.15) until botProfileReady() or vehicleProfileReady() or os.clock()>=deadline
 end
+local isBotProfile=botProfileReady()
 
--- Preserve the user's currently-open main windows before the profile patch stack.
-pcall(function()
-    local gl=shared.GuiLibrary
-    local objs=gl and gl.ObjectsThatCanBeSaved
-    if not objs then return end
-    local state={}
-    for _,name in ipairs({"Combat","Movement","Render","Utility","Visuals","World"}) do
-        local rec=objs[name.."Window"]
-        local obj=rec and rec.Object
-        if obj and typeof(obj)=="Instance" then state[name]=obj.Visible==true end
-    end
-    shared.YokaiPreBotWindowState=state
-end)
-
-if vehicleProfileReady() then
-    load("VehicleMapPerformanceV1.lua")
+if isBotProfile then
+    load("BotLeanBootstrapV12.lua")
+else
+    load("CuratedBootstrap.lua")
 end
 
-if botProfileReady() then
-    -- Passive visual layers first.
+load("DisableUnsafeClientHooks.lua")
+load("DisableLiveSilentAim.lua")
+
+for _,key in ipairs(hookKeys) do
+    local value=originalHooks[key]
+    pcall(function() env[key]=value end)
+end
+
+-- Small common local utilities only.
+load("SimpleAntiFlingFinal.lua")
+load("UniversalMovementV2.lua")
+load("LocalNoclip.lua")
+
+-- Synthetic target polish belongs to Studio only. It is intentionally not loaded
+-- in the live bot profile anymore.
+if RunService:IsStudio() and not isBotProfile then
+    load("SafeTargetAllInOne.lua")
+    load("SafeTargetPolishFinal.lua")
+    load("SafeTargetESPFinal.lua")
+    load("SafeTargetVisualsUXV2.lua")
+    load("FinalVisualPolishV4.lua")
+end
+
+-- Older Gun Testing profile is separate from the current WeaponSystem bot map.
+local playerScripts=lp and lp:FindFirstChild("PlayerScripts")
+local gunController=playerScripts and playerScripts:FindFirstChild("GunController")
+local gunEvents=gunController and gunController:FindFirstChild("Events")
+local gunPlugin=gunEvents and gunEvents:FindFirstChild("GunPlugin")
+local isGunTesting=(not isBotProfile) and lp and lp:FindFirstChild("GunInventory")~=nil and gunPlugin~=nil
+if isGunTesting then
+    load("GunTestingRuntimePolish.lua")
+    load("GunTestingSafeUXV4.lua")
+end
+
+-- Preserve the currently-open main windows before final bot replacements.
+if isBotProfile then
+    pcall(function()
+        local gl=shared.GuiLibrary
+        local objs=gl and gl.ObjectsThatCanBeSaved
+        if not objs then return end
+        local state={}
+        for _,name in ipairs({"Combat","Movement","Render","Utility","Visuals","World"}) do
+            local rec=objs[name.."Window"]
+            local obj=rec and rec.Object
+            if obj and typeof(obj)=="Instance" then state[name]=obj.Visible==true end
+        end
+        shared.YokaiPreBotWindowState=state
+    end)
+end
+
+if vehicleProfileReady() then load("VehicleMapPerformanceV1.lua") end
+
+if isBotProfile then
+    -- One deterministic stack. Older V4/V6 menu owners are deliberately omitted;
+    -- V8/V9/V10 supersede those jobs and V5 owns the WeaponSystem controls.
     load("OwnerBotPracticeRuntimeV2.lua")
     load("OwnerBotAimVisualUXV3.lua")
-    load("OwnerBotVisualPolishV4.lua")
-    load("OwnerBotMenuVisibilityV6.lua")
     load("OwnerBotDamageNotificationsV7.lua")
     load("FullBrightnessFinalV8.lua")
-end
-
--- Final passive menu/performance owner.
-load("FinalMenuPerformanceV9.lua")
-
-if botProfileReady() then
-    -- Load the game-specific weapon integration AFTER every generic patch so its
-    -- Combat controls cannot be removed/replaced by a later compatibility layer.
+    load("FinalMenuPerformanceV9.lua")
     load("OwnerBotWeaponAndMenuV5.lua")
+    load("FinalMenuPinV10.lua")
+    load("StableCustomMenuSnapshotV13.lua")
 end
-
--- Absolute final UI ordering pass. It never deletes feature controls.
-load("FinalMenuPinV10.lua")
-
--- Final persistence guard. From this point onward, late profile/settings callbacks
--- are not allowed to delete the custom controls that were intentionally created above.
-load("PersistentCustomMenuGuardV11.lua")
