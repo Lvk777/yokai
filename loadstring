@@ -99,4 +99,7 @@ if botProfileReady() then
     end
     load("OwnerBotMenuVisibilityV6.lua")
     load("OwnerBotDamageNotificationsV7.lua")
+    -- Must be the last visual owner: this disables every older Fullbright control
+    -- and writes the final Lighting state after the game's own day/night pass.
+    load("FullBrightnessFinalV8.lua")
 end
