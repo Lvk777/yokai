@@ -1,5 +1,5 @@
 -- GunTesting Lite standalone loader V5
--- Clean startup + polished UI + World extras + local freecam + unified practice Combat/Visuals.
+-- Clean startup + polished UI + stable World visuals + local freecam + unified practice Combat/Visuals.
 
 if shared.GunTestingLiteStandaloneV5 == "loaded" then
     local CoreGui=game:GetService("CoreGui")
@@ -36,6 +36,7 @@ shared.GunTestingLiteUIPolishV3=nil
 shared.GunTestingLiteMapESPV4=nil
 shared.GunTestingLiteMovementV4=nil
 shared.GunTestingLitePracticeV5=nil
+shared.GunTestingLiteWorldStabilizerV3=nil
 
 local function runFile(name,transform)
     local ok,err=pcall(function()
@@ -50,25 +51,22 @@ local function runFile(name,transform)
 end
 
 local baseOk=runFile("GunTestingLiteV1.lua",function(src)
-    -- Fix the original UI early-stop bug.
     src=src:gsub("tabs%.Combat:Activate%(%)","")
-    -- UI V3 owns RightShift.
     src=src:gsub(
         "if i%.KeyCode==Enum%.KeyCode%.RightShift then Main%.Visible=not Main%.Visible end",
         "-- RightShift handled by GunTestingLiteUIPolishV3"
     )
-    -- Keep old physics Fly off; Movement V4 supplies local freecam instead.
     src=src:gsub('print%(%"%[GunTestingLite%] loaded%"%)',"")
     return src
 end)
 if not baseOk then shared.GunTestingLiteStandaloneV5=nil; return end
 
--- World controls from V2 are kept because they already work.
+-- V2 still supplies the standalone snapline helper and the original World rows.
 runFile("GunTestingLiteExtrasV2.lua")
+-- V3 hides/replaces those World rows with persistent event-driven controls.
+runFile("GunTestingLiteWorldStabilizerV3.lua")
 runFile("GunTestingLiteUIPolishV3.lua")
--- V5 replaces both the old V1 Combat target logic and the V4 ESP target logic.
 runFile("GunTestingLitePracticeV5.lua")
--- Local-only freecam movement; does not move the character.
 runFile("GunTestingLiteMovementV4.lua")
 
 shared.GunTestingLiteStandaloneV5="loaded"
