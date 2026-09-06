@@ -130,6 +130,12 @@ if isBotProfile then
     load("FullBrightnessFinalV8.lua")
     load("FinalMenuPerformanceV9.lua")
     load("OwnerBotWeaponAndMenuV5.lua")
+
+    -- Final target-visual owner. Loaded after weapon integration so no later gameplay
+    -- patch replaces its callbacks; it only targets NPC/bot models and does not touch
+    -- local GunChams/SelfChams or the other menu categories.
+    load("BotVisualsReliableV14.lua")
+
     load("FinalMenuPinV10.lua")
     load("StableCustomMenuSnapshotV13.lua")
 end
