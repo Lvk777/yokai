@@ -1,7 +1,8 @@
--- GunTesting Lite standalone loader V11
--- Combat in V6, bot visuals in V9, self-only renderer diagnostics V10, Settings/Rejoin in V11.
+-- GunTesting Lite standalone loader V12
+-- Combat + Car ESP remain in V6; bot visuals now use the legacy Yokai ESP renderer ported from AttachedVisualsPreview.lua.
+-- Settings/Rejoin remains enabled.
 
-if shared.GunTestingLiteStandaloneV11 == "loaded" then
+if shared.GunTestingLiteStandaloneV12 == "loaded" then
     local CoreGui=game:GetService("CoreGui")
     local parent=(gethui and gethui()) or CoreGui
     local gui=parent:FindFirstChild("GunTestingLiteV1",true)
@@ -15,8 +16,8 @@ if shared.GunTestingLiteStandaloneV11 == "loaded" then
     end
     return
 end
-if shared.GunTestingLiteStandaloneV11 == "loading" then return end
-shared.GunTestingLiteStandaloneV11="loading"
+if shared.GunTestingLiteStandaloneV12 == "loading" then return end
+shared.GunTestingLiteStandaloneV12="loading"
 
 local BASE="https://raw.githubusercontent.com/Lvk777/yokai/refs/heads/custom/curated-yokai-final/Standalone/"
 local CoreGui=game:GetService("CoreGui")
@@ -25,7 +26,7 @@ local parent=(gethui and gethui()) or CoreGui
 for _,name in ipairs({
     "GunTestingLiteV1","GunTestingLiteOverlay","GunTestingLiteSnaplinesV2",
     "GunTestingLiteMapESPV4","GunTestingLitePracticeV5","GunTestingLiteDirectBotsV6",
-    "GunTestingLiteDirectVisualsV9","GunTestingLiteRendererProbeV10",
+    "GunTestingLiteDirectVisualsV9","GunTestingLiteRendererProbeV10","YokaiAttachedVisualsFunctional",
     "GunTestingLiteSelfESPTest","GunTestingLiteSelfESPLabel","GunTestingLiteBotProbe","GunTestingLiteBotProbeLabel"
 }) do
     local old=parent:FindFirstChild(name,true)
@@ -38,6 +39,7 @@ shared.GunTestingLiteStandaloneV7=nil
 shared.GunTestingLiteStandaloneV8=nil
 shared.GunTestingLiteStandaloneV9=nil
 shared.GunTestingLiteStandaloneV10=nil
+shared.GunTestingLiteStandaloneV11=nil
 shared.GunTestingLiteV1=nil
 shared.GunTestingLiteExtrasV2=nil
 shared.GunTestingLiteUIPolishV3=nil
@@ -50,6 +52,7 @@ shared.GunTestingLiteESPDiagnosticsV7=nil
 shared.GunTestingLiteDirectVisualsV9=nil
 shared.GunTestingLiteRendererProbeV10=nil
 shared.GunTestingLiteSettingsV11=nil
+shared.GunTestingLiteYokaiLegacyESPV12=nil
 
 local function runFile(name,transform)
     local ok,err=pcall(function()
@@ -72,14 +75,15 @@ local baseOk=runFile("GunTestingLiteV1.lua",function(src)
     src=src:gsub('print%(%"%[GunTestingLite%] loaded%"%)',"")
     return src
 end)
-if not baseOk then shared.GunTestingLiteStandaloneV11=nil; return end
+if not baseOk then shared.GunTestingLiteStandaloneV12=nil; return end
 
 runFile("GunTestingLiteWorldStabilizerV3.lua")
 runFile("GunTestingLiteUIPolishV3.lua")
+-- V6 keeps Combat and Car ESP; its older bot visual rows are hidden by V12.
 runFile("GunTestingLiteDirectBotsV6.lua")
-runFile("GunTestingLiteDirectVisualsV9.lua")
-runFile("GunTestingLiteRendererProbeV10.lua")
+-- Legacy Yokai visual renderer, copied from AttachedVisualsPreview and wired to Workspace.Players bot rigs.
+runFile("GunTestingLiteYokaiLegacyESPV12.lua")
 runFile("GunTestingLiteMovementV4.lua")
 runFile("GunTestingLiteSettingsV11.lua")
 
-shared.GunTestingLiteStandaloneV11="loaded"
+shared.GunTestingLiteStandaloneV12="loaded"
