@@ -1,13 +1,12 @@
 -- Restore Yokai's original ArrowIndicator visual and logic.
--- Only scales the original bitmap down so it stays the same arrow, just smaller
--- and proportionally thinner. No replacement chevron, no extra arrow logic.
+-- Only scales the original bitmap down; distance/rotation/position logic is untouched.
 
 repeat task.wait() until shared.YokaiFullyLoaded and shared.GuiLibrary
 
 local GuiLibrary = shared.GuiLibrary
 local RunService = game:GetService("RunService")
 
-local TARGET_SIZE = 150
+local TARGET_SIZE = 120
 local folderConnection
 local lastScan = 0
 
@@ -28,18 +27,14 @@ end
 local function scan()
     local folder = getFolder()
     if not folder then return end
-    for _, obj in ipairs(folder:GetChildren()) do
-        restoreOriginal(obj)
-    end
+    for _, obj in ipairs(folder:GetChildren()) do restoreOriginal(obj) end
 end
 
 local function bindFolder()
     if folderConnection then folderConnection:Disconnect() folderConnection=nil end
     local folder = getFolder()
     if not folder then return end
-    folderConnection = folder.ChildAdded:Connect(function(obj)
-        task.defer(restoreOriginal, obj)
-    end)
+    folderConnection = folder.ChildAdded:Connect(function(obj) task.defer(restoreOriginal, obj) end)
     scan()
 end
 
